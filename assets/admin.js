@@ -7,7 +7,7 @@
   const readSession=()=>{try{return sessionStorage.getItem(authKey)||''}catch(e){return ''}};
   const storeSession=t=>{try{sessionStorage.setItem(authKey,t)}catch(e){}};
   const dropSession=()=>{try{sessionStorage.removeItem(authKey)}catch(e){}};
-  const state={raw:null,token:readSession(),auth:false,identities:{},manualPeople:[],tab:'pegawai',search:'',limit:25,busy:false};
+  const state={raw:null,token:readSession(),auth:false,identities:{},manualPeople:[],tab:'pegawai',search:'',limit:25,busy:false,deletedRecords:[],deletedLoaded:false};
   // SVG ringan, tanpa library ikon tambahan atau request jaringan.
   const eyeIcon=visible=>visible
     ?'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.1A10 10 0 0 1 12 5c5 0 8.6 3.4 10 7a11 11 0 0 1-4.2 5.2"/><path d="M6.5 6.6A11 11 0 0 0 2 12c1.4 3.6 5 7 10 7 1.5 0 2.9-.3 4.1-.9"/></svg>'
@@ -84,8 +84,8 @@
     const missing=p.filter(x=>!state.identities[x.id]?.nip&&!state.identities[x.id]?.nik);
     root.innerHTML=`<div class="admin-grid"><div class="admin-kpi"><strong>${p.length.toLocaleString('id-ID')}</strong><span>Pegawai unik terdata</span></div><div class="admin-kpi"><strong>${(state.raw.professions||[]).length}</strong><span>Profesi</span></div><div class="admin-kpi"><strong>${missing.length.toLocaleString('id-ID')}</strong><span>NIP/NIK perlu dilengkapi</span></div><div class="admin-kpi"><strong>${sip.length.toLocaleString('id-ID')}</strong><span>SIBANGKOM belum dipasangkan</span></div></div>
     <div class="admin-tools"><button class="admin-btn" data-admin="add-person">+ Tambah pegawai</button><button class="admin-btn green" data-admin="add-training">+ Tambah pelatihan</button><button class="admin-btn outline" data-admin="add-profession">+ Tambah profesi</button><button class="admin-btn outline" data-admin="password">Ganti password</button><button class="admin-btn red" data-admin="logout">Keluar</button></div>
-    <div class="admin-tabs">${[['pegawai','Pegawai'],['pelatihan','Pelatihan'],['sibangkom','Cocokkan SIBANGKOM']].map(([id,name])=>`<button data-admin-tab="${id}" class="${state.tab===id?'active':''}">${name}</button>`).join('')}</div>
-    <input class="admin-filter" id="adminQuery" placeholder="${state.tab==='sibangkom'?'Cari peserta SIBANGKOM...':state.tab==='pegawai'?'Cari nama, unit kerja, atau profesi...':'Cari judul pelatihan...'}" value="${esc(state.search)}" autocomplete="off" aria-label="Pencarian admin"><div id="adminListing"></div>`;
+    <div class="admin-tabs">${[['pegawai','Pegawai'],['pelatihan','Pelatihan'],['sibangkom','Cocokkan SIBANGKOM'],['dihapus','Data Terhapus']].map(([id,name])=>`<button data-admin-tab="${id}" class="${state.tab===id?'active':''}">${name}</button>`).join('')}</div>
+    <input class="admin-filter" id="adminQuery" placeholder="${state.tab==='sibangkom'?'Cari peserta SIBANGKOM...':state.tab==='pegawai'?'Cari nama, unit kerja, atau profesi...':state.tab==='dihapus'?'Cari data terhapus...':'Cari judul pelatihan...'}" value="${esc(state.search)}" autocomplete="off" aria-label="Pencarian admin"><div id="adminListing"></div>`;
     renderListing();
   }
   function renderListing(){const root=$('#adminListing');if(!root||!state.raw)return;
@@ -93,9 +93,11 @@
     let list=[];
     if(state.tab==='pegawai')list=people.filter(p=>norm([p.name,p.unit,...(p.professions||[])].join(' ')).includes(q)).sort((a,b)=>a.name.localeCompare(b.name,'id'));
     else if(state.tab==='pelatihan')list=train.filter(t=>norm([t.name,t.profession,t.type].join(' ')).includes(q)).sort((a,b)=>a.name.localeCompare(b.name,'id'));
+    else if(state.tab==='dihapus')list=(state.deletedRecords||[]).filter(x=>norm([x.name,x.type].join(' ')).includes(q));
     else list=sib.filter(s=>norm([s.name,s.bidang,s.tim].join(' ')).includes(q));
     const slice=list.slice(0,state.limit);
     const row=x=>{
+      if(state.tab==='dihapus')return `<article class="admin-record"><div><h4>${esc(x.name)}</h4><p>${esc(x.type==='pegawai'?'Pegawai':'Pelatihan')} · ${esc(x.deletedAt||'')}</p></div><button class="admin-btn outline" data-admin-restore="${esc(x.type)}" data-record-id="${esc(x.id)}">Pulihkan</button></article>`;
       if(state.tab==='pegawai'){
         const identity=state.identities[x.id]||{};
         return `<article class="admin-record"><div><h4>${esc(x.name)}</h4><p>${esc(x.unit)} · ${esc((x.professions||[]).join(', '))}</p><div class="admin-identity ${identity.nip||identity.nik?'':'weak'}">${identity.nip?'NIP: '+esc(identity.nip):identity.nik?'NIK: '+esc(identity.nik):'NIP/NIK belum lengkap'}</div></div><div><button data-admin-edit="${esc(x.id)}">Perbaiki</button> <button data-admin-status="${esc(x.id)}">Status pelatihan</button> <button class="admin-delete-btn" data-admin-delete="pegawai" data-record-id="${esc(x.id)}">Hapus</button></div></article>`;
@@ -148,6 +150,9 @@
       const result=await API().call('deleteRecord',state.token,{type,id,confirmation});
       if(!result?.ok)throw Error('Penghapusan gagal.');
       const raw=state.raw;
+      if(state.deletedLoaded){const removed=(type==='pegawai'?raw.people:raw.trainings).find(x=>x.id===id);
+        if(removed)state.deletedRecords.unshift({type,id,name:removed.name,deletedAt:'Baru saja'});
+      }
       if(type==='pegawai'){
         raw.people=(raw.people||[]).filter(p=>p.id!==id);
         state.manualPeople=state.manualPeople.filter(p=>p.id!==id);
@@ -167,6 +172,60 @@
       window.PelatihanView?.syncFromRaw?.(raw);
       closeModal();render();toast(type==='pegawai'?'Pegawai sudah dihapus dari aplikasi.':'Pelatihan sudah dihapus dari aplikasi.');
     }catch(e){if(error)error.textContent=e.message||String(e);if(button){button.textContent='Ya, hapus';button.disabled=false;}}
+    finally{state.busy=false;}
+  }
+  async function loadDeletedRecords(){
+    if(!state.auth)return;
+    const target=$('#adminListing');if(target)target.innerHTML='<div class="admin-tip">Membaca daftar terhapus...</div>';
+    try{const records=await API().call('getDeletedRecords',state.token);state.deletedRecords=Array.isArray(records)?records:[];state.deletedLoaded=true;if(state.tab==='dihapus')renderListing();}
+    catch(e){if(state.tab==='dihapus'&&target)target.innerHTML='<div class="admin-tip">Tidak bisa membuka riwayat hapus: '+esc(e.message)+'</div>';}
+  }
+  function restoreForm(type,id){
+    const record=state.deletedRecords.find(r=>r.id===id&&r.type===type);
+    if(!record||state.busy)return;
+    modal('Pulihkan '+(type==='pegawai'?'pegawai':'pelatihan'),`<form id="adminRestoreForm" data-type="${esc(type)}" data-id="${esc(id)}"><div class="admin-tip"><b>${esc(record.name)}</b><p>Data akan muncul kembali di aplikasi. Riwayat hapus tetap tersimpan.</p></div><div class="admin-field"><label for="adminRestoreConfirm">Ketik <b>PULIHKAN</b> untuk melanjutkan</label><input name="confirmation" id="adminRestoreConfirm" placeholder="PULIHKAN" spellcheck="false" autocomplete="off" required></div><div class="admin-actions"><button type="button" class="admin-btn outline" data-admin="close">Batal</button><button type="submit" class="admin-btn" id="adminRestoreSubmit" disabled>Pulihkan data</button></div><p id="adminFormError" class="error-live" role="alert"></p></form>`);
+    $('#adminRestoreConfirm')?.focus();
+  }
+  async function submitRestore(form){
+    if(state.busy||$('#adminRestoreConfirm')?.value!=='PULIHKAN')return;
+    state.busy=true;
+    const btn=$('#adminRestoreSubmit'),error=$('#adminFormError'),type=form.dataset.type,id=form.dataset.id;
+    if(btn){btn.disabled=true;btn.textContent='Memulihkan...'}
+    try{
+      const result=await API().call('restoreRecord',state.token,{type,id,confirmation:'PULIHKAN'});
+      if(!result?.ok)throw Error('Pemulihan gagal.');
+      state.deletedRecords=state.deletedRecords.filter(x=>!(x.id===id&&x.type===type));
+      const raw=state.raw;
+      if(type==='pegawai'&&result.person){
+        let person=raw.people.find(p=>p.id===id);
+        if(!person){person=result.person;raw.people.push(person)}
+        else Object.assign(person,result.person);
+        const statuses=result.statuses||[];
+        for(const r of statuses){
+          person.completed=person.completed.filter(x=>x!==r.trainingId);
+          person.notCompleted=person.notCompleted.filter(x=>x!==r.trainingId);
+          (r.done?person.completed:person.notCompleted).push(r.trainingId);
+        }
+        for(const key of result.sibKeys||[]){
+          const sib=(raw.sibEntries||[]).find(x=>x.key===key);
+          if(!sib)continue;
+          sib.personId=id;
+          person.sib={key,bidang:sib.bidang,tim:sib.tim,progress:sib.progress,jpl:sib.jpl};
+          person.completed=[...new Set([...(person.completed||[]),...(sib.done||[])])];
+          person.notCompleted=[...new Set([...(person.notCompleted||[]),...(sib.no||[])])].filter(x=>!person.completed.includes(x));
+          raw.people=raw.people.filter(p=>p.id!==key);
+        }
+        state.identities[id]=result.identity||{};
+        if(id.startsWith('USR:')){
+          state.manualPeople=state.manualPeople.filter(p=>p.id!==id);
+          state.manualPeople.push({id,name:person.name,unit:person.unit,status:person.status,professions:person.professions,program:person.program});
+        }
+      }
+      if(type==='pelatihan'&&result.training&&!raw.trainings.some(t=>t.id===id))raw.trainings.push(result.training);
+      API()?.commitLocal?.(raw);
+      window.PelatihanView?.syncFromRaw?.(raw);
+      closeModal();render();toast('Data '+(type==='pegawai'?'pegawai':'pelatihan')+' sudah dipulihkan.');
+    }catch(e){if(error)error.textContent=e.message||String(e);if(btn){btn.disabled=false;btn.textContent='Pulihkan data'}}
     finally{state.busy=false;}
   }
   function passwordForm(){modal('Ganti password admin',`<form id="adminPasswordForm">${field('old','Password sekarang','','type="password" required autocomplete="current-password"')}${field('next','Password baru (min. 10 karakter)','','type="password" minlength="10" required autocomplete="new-password"')}${field('confirm','Ulangi password baru','','type="password" required autocomplete="new-password"')}${actions('Ganti password')}</form>`)}
@@ -258,7 +317,8 @@
   document.addEventListener('click',async e=>{
     const eye=e.target.closest('[data-admin-eye]');
     if(eye){const input=document.getElementById(eye.dataset.adminEye);if(!input)return;const visible=input.type==='password';input.type=visible?'text':'password';eye.innerHTML=eyeIcon(visible);eye.setAttribute('aria-pressed',String(visible));eye.setAttribute('aria-label',visible?'Sembunyikan password':'Tampilkan password');eye.title=visible?'Sembunyikan password':'Lihat password';return;}
-    const tab=e.target.closest('[data-admin-tab]');if(tab){state.tab=tab.dataset.adminTab;state.search='';state.limit=25;render();return}
+    const tab=e.target.closest('[data-admin-tab]');if(tab){state.tab=tab.dataset.adminTab;state.search='';state.limit=25;render();if(state.tab==='dihapus'&&!state.deletedLoaded)loadDeletedRecords();return}
+    const restore=e.target.closest('[data-admin-restore]');if(restore){restoreForm(restore.dataset.adminRestore,restore.dataset.recordId);return}
     const remove=e.target.closest('[data-admin-delete]');if(remove){deleteForm(remove.dataset.adminDelete,remove.dataset.recordId);return}
     const edit=e.target.closest('[data-admin-edit]');if(edit){personForm(edit.dataset.adminEdit);return}
     const mark=e.target.closest('[data-admin-status]');if(mark){statusForm(mark.dataset.adminStatus);return}
@@ -266,9 +326,9 @@
     const toggleBtn=e.target.closest('[data-admin-toggle]');if(toggleBtn){await toggle(toggleBtn.dataset.adminPerson,toggleBtn.dataset.adminToggle,toggleBtn);return}
     const action=e.target.closest('[data-admin]');if(action){const a=action.dataset.admin;if(a==='close')closeModal();if(a==='add-person')personForm();if(a==='add-training')trainingForm();if(a==='add-profession')professionForm();if(a==='password')passwordForm();if(a==='logout')await logout();if(a==='more'){state.limit+=25;renderListing()}if(a==='refresh-link')refreshLinkCandidates()}
   });
-  document.addEventListener('input',e=>{if(e.target.id==='adminQuery'){state.search=e.target.value;state.limit=25;renderListing()}if(e.target.id==='adminLinkQuery')renderLinkCandidates();if(e.target.id==='adminDeleteConfirm'){const btn=$('#adminDeleteSubmit');if(btn)btn.disabled=e.target.value!=='HAPUS'||state.busy;}if(e.target.id==='adminStatusQuery'){const q=norm(e.target.value);document.querySelectorAll('[data-status-name]').forEach(row=>row.hidden=!norm(row.dataset.statusName).includes(q))}});
+  document.addEventListener('input',e=>{if(e.target.id==='adminQuery'){state.search=e.target.value;state.limit=25;renderListing()}if(e.target.id==='adminLinkQuery')renderLinkCandidates();if(e.target.id==='adminRestoreConfirm'){const btn=$('#adminRestoreSubmit');if(btn)btn.disabled=e.target.value!=='PULIHKAN'||state.busy;}if(e.target.id==='adminDeleteConfirm'){const btn=$('#adminDeleteSubmit');if(btn)btn.disabled=e.target.value!=='HAPUS'||state.busy;}if(e.target.id==='adminStatusQuery'){const q=norm(e.target.value);document.querySelectorAll('[data-status-name]').forEach(row=>row.hidden=!norm(row.dataset.statusName).includes(q))}});
   document.addEventListener('change',e=>{if(e.target.id==='adminTrainingType')$('#adminTrainingProfession').disabled=e.target.value!=='profesi'});
-  document.addEventListener('submit',e=>{if(!e.target.id.startsWith('admin'))return;e.preventDefault();if(e.target.id==='adminLogin')login(e.target);else if(e.target.id==='adminDeleteForm')submitDelete(e.target);else submitForm(e.target)});
+  document.addEventListener('submit',e=>{if(!e.target.id.startsWith('admin'))return;e.preventDefault();if(e.target.id==='adminLogin')login(e.target);else if(e.target.id==='adminDeleteForm')submitDelete(e.target);else if(e.target.id==='adminRestoreForm')submitRestore(e.target);else submitForm(e.target)});
   $('#adminModalClose').addEventListener('click',closeModal);$('#adminModalBg').addEventListener('click',e=>{if(e.target===$('#adminModalBg'))closeModal()});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#adminModalBg').classList.contains('open'))closeModal()});
   async function setData(raw){state.raw=raw;mergeManualPeople();if(state.token&&!state.auth&&API()?.GAS){try{await fetchAdmin()}catch(e){toast('Sesi admin berakhir. Masuk kembali untuk mengedit.')}}if(window.PelatihanView)render()}
