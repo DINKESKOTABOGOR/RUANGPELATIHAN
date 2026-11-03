@@ -31,7 +31,7 @@
 
   const channel='dinkes-'+(globalThis.crypto?.randomUUID?.()||(''+Date.now()+Math.random()).replace('.',''));
   const outstanding=new Map();
-  let peer=null,peerOrigin='',raw=null,loaded=false,bridgeFrame=null,connection=null,serial=0;
+  let peer=null,peerOrigin='',raw=null,loaded=false,bridgeFrame=null,connection=null,serial=0,localRevision=0;
   function assertOrigin(origin){
     try{const host=new URL(origin).hostname;return origin.startsWith('https://') && (host==='script.google.com'||host==='script.googleusercontent.com'||host.endsWith('.script.googleusercontent.com')||host.endsWith('.googleusercontent.com'))}
     catch(e){return false}
@@ -125,6 +125,11 @@
     try{sessionStorage.setItem(CACHE_KEY,packed)}catch(e){}
   }
   function clearCache(){for(const store of [localStorage,sessionStorage])try{store.removeItem(CACHE_KEY)}catch(e){}}
+  function commitLocal(data){
+    // Hanya dipanggil SESUDAH server menyatakan penyimpanan berhasil.
+    raw=data;localRevision++;writeCache(data);
+    status('Tersimpan di Google Sheets');
+  }
   function show(data,kind){
     if(loaded)return;
     raw=data;
@@ -147,7 +152,7 @@
     try{const data=await publicFetch(30000,true);writeCache(data);window.location.reload()}
     catch(e){status('Sinkronisasi gagal');window.PelatihanView?.toast(e.message);btn.disabled=false;btn.classList.remove('sync-busy')}
   }
-  window.PelatihanBridge={GAS,call,project,getRaw:()=>raw,clearCache,refresh,writeCache,warmAdmin:()=>connect().catch(e=>console.warn('Penghubung admin:',e.message))};
+  window.PelatihanBridge={GAS,call,project,getRaw:()=>raw,clearCache,refresh,writeCache,commitLocal,warmAdmin:()=>connect().catch(e=>console.warn('Penghubung admin:',e.message))};
   document.getElementById('refreshSheet')?.addEventListener('click',refresh);
   const cached=readCache();
   if(!GAS){showError('Alamat Apps Script belum diisi. Isi assets/config.js dengan URL deployment /exec.');return}
@@ -155,8 +160,8 @@
     // Stale-while-revalidate: data terakhir tampil seketika meskipun cache kadaluarsa.
     show(cached.data,'cached');
     if(Date.now()-cached.savedAt<TTL){status('Data tersimpan · klik Sinkronkan untuk memperbarui')}
-    else publicFetch().then(data=>{writeCache(data);raw=data;window.PelatihanAdmin?.setData(data);status('Data dari Google Sheets diperbarui');})
-      .catch(e=>{status('Menampilkan data tersimpan · koneksi gagal');console.warn('Sinkronisasi gagal:',e.message)});
+    else {const revision=localRevision;publicFetch().then(data=>{if(localRevision!==revision)return;writeCache(data);raw=data;window.PelatihanAdmin?.setData(data);status('Data dari Google Sheets diperbarui');})
+      .catch(e=>{status('Menampilkan data tersimpan · koneksi gagal');console.warn('Sinkronisasi gagal:',e.message)});}
   }else{
     publicFetch().then(data=>{writeCache(data);show(data,'live')}).catch(e=>showError('Google Sheets gagal dimuat: '+e.message));
   }

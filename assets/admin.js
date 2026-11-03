@@ -135,32 +135,78 @@
     // Cari dua kata pertama dulu; gelar pada SIBANGKOM tidak menghalangi kecocokan.
     $('#adminLinkQuery').value=String(sib.name||'').trim().split(/\s+/).slice(0,2).join(' ');
     renderLinkCandidates();
-    // Snapshot administrasi selalu terbaru walaupun halaman publik masih menampilkan cache lama.
-    refreshLinkCandidates();
+    // Data terbaru sudah diambil saat login atau saat terakhir menyimpan pegawai.
+    // Jangan membuat request tambahan setiap kali modal dibuka.
+    // Tombol Perbarui daftar tersedia bila admin lain baru saja menambah pegawai.
+  }
+  // Terapkan perubahan kecil ke memori dan cache setelah backend menyatakan BERHASIL.
+  // Hindari getPublicData(true) + reload seluruh website setiap kali admin menyimpan satu baris.
+  function localSaved(form,payload,result){
+    const raw=state.raw;if(!raw)return;
+    if(form.id==='adminLinkForm'){
+      const sib=(raw.sibEntries||[]).find(x=>x.key===payload.sibKey);
+      const target=(raw.people||[]).find(x=>x.id===payload.personId);
+      if(!sib||!target)return;
+      const previous=(raw.people||[]).find(x=>x.id===sib.personId);
+      if(previous?.sib?.key===sib.key){
+        previous.sib=null;
+        previous.completed=(previous.completed||[]).filter(id=>!(sib.done||[]).includes(id));
+        previous.notCompleted=(previous.notCompleted||[]).filter(id=>!(sib.no||[]).includes(id));
+      }
+      sib.personId=payload.personId;
+      target.sib={key:sib.key,bidang:sib.bidang,tim:sib.tim,progress:sib.progress,jpl:sib.jpl};
+      target.unmatchedSib=false;
+      target.completed=[...new Set([...(target.completed||[]),...(sib.done||[])])];
+      target.notCompleted=[...new Set([...(target.notCompleted||[]),...(sib.no||[])])].filter(id=>!target.completed.includes(id));
+      raw.people=(raw.people||[]).filter(p=>p.id!==sib.key);
+      window.PelatihanView?.patchSibangkom?.(sib.key,payload.personId);
+    }else if(form.id==='adminPersonForm'){
+      const id=result.id||payload.id;if(!id)return;
+      let person=(raw.people||[]).find(x=>x.id===id);
+      if(!person){person={id,completed:[],notCompleted:[],sources:[],sib:null,unmatchedSib:false};raw.people.push(person)}
+      Object.assign(person,{name:payload.name,unit:payload.unit,status:payload.status,program:payload.program,professions:payload.professions});
+      state.identities[id]={nip:payload.nip||'',nik:payload.nik||''};
+      const index=state.manualPeople.findIndex(x=>x.id===id);
+      const publicPerson={id,name:payload.name,unit:payload.unit,status:payload.status,program:payload.program,professions:payload.professions};
+      if(index<0)state.manualPeople.push(publicPerson);else state.manualPeople[index]=publicPerson;
+    }else if(form.id==='adminProfessionForm'){
+      const name=String(payload.name||'').trim().toUpperCase();
+      if(name&&!(raw.professions||[]).includes(name))raw.professions.push(name);
+    }else if(form.id==='adminTrainingForm'){
+      if(result.id)raw.trainings.push({id:result.id,name:payload.name,profession:payload.type==='profesi'?payload.profession:'',type:payload.type,jpl:payload.jpl,link:payload.link||''});
+    }
+    // Snapshot publik tidak berisi token, NIP, maupun NIK.
+    API()?.commitLocal?.(raw);
   }
   async function submitForm(form){if(state.busy)return;
     const error=$('#adminFormError'),button=form.querySelector('button[type=submit]');state.busy=true;if(error)error.textContent='';if(button){button.disabled=true;button.textContent='Menyimpan...'}
     try{
-      const data=new FormData(form);let result;
+      const data=new FormData(form);let result,payload;
       if(form.id==='adminPersonForm'){
         const prof=[...form.querySelectorAll('input[name="profession"]:checked')].map(n=>n.value);
-        result=await API().call('savePerson',state.token,{id:form.dataset.id||'',name:data.get('name'),unit:data.get('unit'),status:data.get('status'),program:data.get('program'),nip:data.get('nip'),nik:data.get('nik'),professions:prof});
-      }else if(form.id==='adminProfessionForm')result=await API().call('saveProfession',state.token,{name:data.get('name')});
-      else if(form.id==='adminTrainingForm')result=await API().call('saveTraining',state.token,{name:data.get('name'),type:data.get('type'),profession:data.get('profession'),jpl:Number(data.get('jpl')||0),link:data.get('link')||''});
-      else if(form.id==='adminLinkForm')result=await API().call('linkSibangkom',state.token,{sibKey:form.dataset.key,personId:data.get('personId')});
+        payload={id:form.dataset.id||'',name:data.get('name'),unit:data.get('unit'),status:data.get('status'),program:data.get('program'),nip:data.get('nip'),nik:data.get('nik'),professions:prof};
+        result=await API().call('savePerson',state.token,payload);
+      }else if(form.id==='adminProfessionForm'){
+        payload={name:data.get('name')};result=await API().call('saveProfession',state.token,payload);
+      }else if(form.id==='adminTrainingForm'){
+        payload={name:data.get('name'),type:data.get('type'),profession:data.get('profession'),jpl:Number(data.get('jpl')||0),link:data.get('link')||''};
+        result=await API().call('saveTraining',state.token,payload);
+      }else if(form.id==='adminLinkForm'){
+        payload={sibKey:form.dataset.key,personId:data.get('personId')};
+        result=await API().call('linkSibangkom',state.token,payload);
+      }
       else if(form.id==='adminPasswordForm'){
         if(data.get('next')!==data.get('confirm'))throw Error('Konfirmasi password belum sama.');
         await API().call('changeAdminPassword',state.token,data.get('old'),data.get('next'));closeModal();await logout();toast('Password diganti. Silakan login dengan password baru.');return;
       }
       if(!result?.ok)throw Error('Penyimpanan gagal, coba lagi.');
-      closeModal();toast('Tersimpan! Data lagi disinkronkan...');await refreshAfterSave();
+      localSaved(form,payload,result);closeModal();render();toast('Tersimpan di Google Sheets.');
     }catch(e){if(error)error.textContent=e.message;else toast(e.message);if(button){button.disabled=false;button.textContent='Coba simpan lagi'}}finally{state.busy=false}
   }
-  async function refreshAfterSave(){API().clearCache();const data=await API().call('getPublicData',true);API().writeCache(data);window.location.reload()}
   async function toggle(personId,trainingId,button){if(state.busy)return;const p=(state.raw.people||[]).find(x=>x.id===personId),done=!!p?.completed?.includes(trainingId);state.busy=true;button.disabled=true;
     try{await API().call('saveCompletion',state.token,{personId,trainingId,done:!done});button.className='admin-btn '+(!done?'done':'todo');button.textContent=!done?'Sudah':'Belum';
       if(!done){p.completed.push(trainingId);p.notCompleted=p.notCompleted.filter(id=>id!==trainingId)}else{p.completed=p.completed.filter(id=>id!==trainingId);if(!p.notCompleted.includes(trainingId))p.notCompleted.push(trainingId)}
-      API().clearCache();toast('Status tersimpan di Sheet.');
+      API().commitLocal?.(state.raw);toast('Status tersimpan di Sheet.');
     }catch(e){toast(e.message)}finally{state.busy=false;button.disabled=false}
   }
   document.addEventListener('click',async e=>{
