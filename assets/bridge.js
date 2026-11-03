@@ -6,7 +6,7 @@
   const GAS=/^https:\/\/script\.google\.com\/macros\/s\/[-\w]+\/exec$/.test(BACKEND_URL);
   const CACHE_KEY='dinkes_sdm_live_github_2026_v6';
   const TTL=Number(window.DINKES_CONFIG?.PUBLIC_CACHE_MS)||180000;
-  const allowed=new Set(['getPublicData','getAdminData','loginAdmin','logoutAdmin','changeAdminPassword','savePerson','saveProfession','saveTraining','saveCompletion','linkSibangkom']);
+  const allowed=new Set(['getPublicData','getAdminData','loginAdmin','logoutAdmin','changeAdminPassword','savePerson','saveProfession','saveTraining','saveCompletion','setTrainingStatus','savePersonTraining','linkSibangkom']);
   // Read-only public endpoint via ContentService JSONP (tanpa iframe / CORS).
   // Permintaan admin tetap memakai google.script.run dalam iframe terproteksi.
   let callbackSerial=0;
@@ -101,7 +101,10 @@
         const valid=new Set(roleTraining[role]);
         const yes=[...new Set((p.completed||[]).map(id=>toNum.get(id)).filter(id=>valid.has(id)))];
         const no=[...new Set((p.notCompleted||[]).map(id=>toNum.get(id)).filter(id=>valid.has(id)&&!yes.includes(id)))];
-        people.push({id:p.id+'|'+role,sourceId:p.id,name:p.name||'Nama belum diisi',role,unit:p.unit||'Unit belum diisi',employment:p.status||'',program:p.program||'',nip:'',yes,no});
+        const completedSet=new Set(p.completed||[]),notCompletedSet=new Set(p.notCompleted||[]);
+        const extras=(data.trainings||[]).filter(t=>(t.type==='individu'||t.type==='wajib') &&
+          (completedSet.has(t.id)||notCompletedSet.has(t.id))).map(t=>({id:t.id,name:t.name||'Pelatihan tambahan',status:completedSet.has(t.id)?'yes':'no'}));
+        people.push({id:p.id+'|'+role,sourceId:p.id,name:p.name||'Nama belum diisi',role,unit:p.unit||'Unit belum diisi',employment:p.status||'',program:p.program||'',nip:'',yes,no,extras});
       }
     }
     const names=Object.fromEntries((data.trainings||[]).map(t=>[t.id,t.name]));

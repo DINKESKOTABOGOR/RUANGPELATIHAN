@@ -7,7 +7,7 @@
   const readSession=()=>{try{return sessionStorage.getItem(authKey)||''}catch(e){return ''}};
   const storeSession=t=>{try{sessionStorage.setItem(authKey,t)}catch(e){}};
   const dropSession=()=>{try{sessionStorage.removeItem(authKey)}catch(e){}};
-  const state={raw:null,token:readSession(),auth:false,identities:{},tab:'pegawai',search:'',limit:25,busy:false};
+  const state={raw:null,token:readSession(),auth:false,identities:{},tab:'pegawai',search:'',limit:25,busy:false,dirty:false,statusBusy:false};
   // SVG ringan, tanpa library ikon tambahan atau request jaringan.
   const eyeIcon=visible=>visible
     ?'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.1A10 10 0 0 1 12 5c5 0 8.6 3.4 10 7a11 11 0 0 1-4.2 5.2"/><path d="M6.5 6.6A11 11 0 0 0 2 12c1.4 3.6 5 7 10 7 1.5 0 2.9-.3 4.1-.9"/></svg>'
@@ -40,7 +40,7 @@
     const row=x=>{
       if(state.tab==='pegawai'){
         const identity=state.identities[x.id]||{};
-        return `<article class="admin-record"><div><h4>${esc(x.name)}</h4><p>${esc(x.unit)} · ${esc((x.professions||[]).join(', '))}</p><div class="admin-identity ${identity.nip||identity.nik?'':'weak'}">${identity.nip?'NIP: '+esc(identity.nip):identity.nik?'NIK: '+esc(identity.nik):'NIP/NIK belum lengkap'}</div></div><div><button data-admin-edit="${esc(x.id)}">Perbaiki</button> <button data-admin-status="${esc(x.id)}">Status pelatihan</button></div></article>`;
+        return `<article class="admin-record"><div><h4>${esc(x.name)}</h4><p>${esc(x.unit)} · ${esc((x.professions||[]).join(', '))}</p><div class="admin-identity ${identity.nip||identity.nik?'':'weak'}">${identity.nip?'NIP: '+esc(identity.nip):identity.nik?'NIK: '+esc(identity.nik):'NIP/NIK belum lengkap'}</div></div><div><button data-admin-edit="${esc(x.id)}">Perbaiki</button> <button data-admin-status="${esc(x.id)}">Kelola pelatihan</button></div></article>`;
       }
       if(state.tab==='pelatihan')return `<article class="admin-record"><div><h4>${esc(x.name)}</h4><p>${esc(x.profession||x.type)} · ${esc(x.jpl||'')} ${x.jpl?'JPL':''}</p></div><span class="admin-identity">${esc(x.type)}</span></article>`;
       return `<article class="admin-record"><div><h4>${esc(x.name)}</h4><p>${esc(x.bidang||'Bidang belum diisi')} · ${esc(x.tim||'Tim belum diisi')}</p><div class="admin-identity">${people.some(p=>p.id===x.personId)?'Sudah cocok':'Perlu dicocokkan'}</div></div><button data-admin-link="${esc(x.key)}">${people.some(p=>p.id===x.personId)?'Ganti pasangan':'Cocokkan'}</button></article>`;
@@ -57,7 +57,7 @@
   async function logout(){try{if(state.token)await API().call('logoutAdmin',state.token)}catch(e){}
     state.auth=false;state.token='';state.identities={};dropSession();render();toast('Berhasil keluar.')}
   function modal(title,content){$('#adminModalTitle').textContent=title;$('#adminModalBody').innerHTML=content;$('#adminModalBg').classList.add('open');document.body.style.overflow='hidden';}
-  function closeModal(){$('#adminModalBg').classList.remove('open');$('#adminModalBody').innerHTML='';document.body.style.overflow='';}
+  function closeModal(){if(state.statusBusy){toast('Status sedang disimpan, coba tutup setelah selesai.');return;}$('#adminModalBg').classList.remove('open');$('#adminModalBody').innerHTML='';document.body.style.overflow='';if(state.dirty){state.dirty=false;refreshAfterSave().catch(e=>toast('Sinkronisasi gagal: '+e.message));}}
   const field=(name,label,value='',extra='')=>`<div class="admin-field"><label for="a_${name}">${esc(label)}</label>${/type="password"/.test(extra)?`<div class="admin-password-wrap"><input id="a_${name}" name="${name}" value="${esc(value)}" ${extra}><button class="admin-eye" type="button" data-admin-eye="a_${name}" aria-label="Tampilkan password" title="Lihat password" aria-pressed="false">${eyeIcon(false)}</button></div>`:`<input id="a_${name}" name="${name}" value="${esc(value)}" ${extra}>`}</div>`;
   const actions=(submit='Simpan')=>`<div class="admin-actions"><button type="button" class="admin-btn outline" data-admin="close">Batal</button><button type="submit" class="admin-btn">${submit}</button></div><p id="adminFormError" class="error-live"></p>`;
   function personForm(id=''){
@@ -69,8 +69,32 @@
   function trainingForm(){modal('Tambah pelatihan',`<form id="adminTrainingForm"><div class="admin-form-grid">${field('name','Nama pelatihan','','required maxlength="300"')}<div class="admin-field"><label>Jenis data</label><select name="type" id="adminTrainingType"><option value="profesi">Pelatihan profesi</option><option value="sibangkom">SIBANGKOM</option><option value="wajib">Pembelajaran wajib</option></select></div><div class="admin-field"><label>Profesi</label><select name="profession" id="adminTrainingProfession">${(state.raw.professions||[]).map(pr=>`<option value="${esc(pr)}">${esc(pr)}</option>`).join('')}</select></div>${field('jpl','Jumlah JPL','0','type="number" min="0" max="1000"')}${field('link','Link pembelajaran (https://)','','type="url"')}</div>${actions('Tambah pelatihan')}</form>`)}
   function passwordForm(){modal('Ganti password admin',`<form id="adminPasswordForm">${field('old','Password sekarang','','type="password" required autocomplete="current-password"')}${field('next','Password baru (min. 10 karakter)','','type="password" minlength="10" required autocomplete="new-password"')}${field('confirm','Ulangi password baru','','type="password" required autocomplete="new-password"')}${actions('Ganti password')}</form>`)}
   function statusForm(id){const p=(state.raw.people||[]).find(x=>x.id===id);if(!p)return;
-    const applicable=(state.raw.trainings||[]).filter(t=>t.type==='profesi'&&(p.professions||[]).includes(t.profession)||t.type==='sibangkom'&&p.sib);
-    modal('Status pelatihan · '+p.name,`<div class="admin-tip">Klik status untuk mengubahnya. Pilihan “Sudah” atau “Belum” langsung tersimpan ke Google Sheets. Jika tidak ada isian sumber, status awal dianggap “Belum diisi”.</div><input id="adminStatusQuery" class="admin-filter" placeholder="Cari pelatihan pegawai ini..."><div class="admin-training-list" id="adminStatusRows">${applicable.map(t=>`<div class="admin-status-row" data-status-name="${esc(norm(t.name))}"><div>${esc(t.name)} <small style="color:#9aa9b7">· ${esc(t.profession||t.type)}</small></div><button class="admin-btn ${p.completed?.includes(t.id)?'done':p.notCompleted?.includes(t.id)?'todo':'unknown'}" data-admin-toggle="${esc(t.id)}" data-admin-person="${esc(p.id)}">${p.completed?.includes(t.id)?'Sudah':p.notCompleted?.includes(t.id)?'Belum':'Belum diisi'}</button></div>`).join('')}</div><div class="admin-actions"><button class="admin-btn outline" data-admin="close">Tutup</button></div>`);
+    const matching=(state.raw.trainings||[]).filter(t=>
+      t.type==='profesi'&&(p.professions||[]).includes(t.profession)||
+      t.type==='sibangkom'&&p.sib||t.type==='wajib'||t.type==='individu');
+    const assigned=matching.filter(t=>t.type==='profesi'||t.type==='sibangkom'||
+      (p.completed||[]).includes(t.id)||(p.notCompleted||[]).includes(t.id));
+    const status=t=>(p.completed||[]).includes(t.id)?'yes':(p.notCompleted||[]).includes(t.id)?'no':'unknown';
+    const label={yes:'Sudah',no:'Belum',unknown:'Belum diisi'};
+    const options=matching.slice().sort((a,b)=>a.name.localeCompare(b.name,'id')).map(t=>
+      `<option value="${esc(t.id)}" data-training-option-name="${esc(norm(t.name))}">${esc(t.name)} · ${esc(t.profession||t.type)}</option>`).join('');
+    const list=assigned.slice().sort((a,b)=>a.name.localeCompare(b.name,'id')).map(t=>{
+      const current=status(t);
+      return `<div class="admin-status-row" data-status-name="${esc(norm(t.name))}"><div class="admin-status-label"><strong>${esc(t.name)}</strong><small>${esc(t.profession||(t.type==='individu'?'Pelatihan tambahan':t.type))}</small></div><select class="admin-status-picker ${current}" data-admin-status-change="${esc(t.id)}" data-admin-person="${esc(p.id)}" aria-label="Status ${esc(t.name)}">${Object.entries(label).map(([value,text])=>`<option value="${value}" ${current===value?'selected':''}>${text}</option>`).join('')}</select></div>`;
+    }).join('');
+    modal('Kelola pelatihan · '+p.name,`<div class="admin-tip">Perubahan status langsung disimpan di Google Sheets. Pilih <b>Sudah</b>, <b>Belum</b>, atau <b>Belum diisi</b>. Data sumber profesi tidak ditimpa.</div>
+      <div class="admin-add-training"><h3>+ Tambah pelatihan untuk ${esc(p.name)}</h3>
+      <form id="adminAssignTrainingForm" data-id="${esc(p.id)}">
+        <div class="admin-field"><label for="adminAssignFilter">Cari dari katalog pelatihan</label><input id="adminAssignFilter" type="search" placeholder="Cari judul pelatihan yang tersedia..."></div>
+        <div class="admin-field"><label for="adminAssignId">Pilih pelatihan yang tersedia</label><select id="adminAssignId" name="trainingId"><option value="">— Pilih pelatihan —</option>${options}</select></div>
+        <div class="admin-or">ATAU TAMBAHKAN PELATIHAN BARU</div>
+        <div class="admin-field"><label for="adminNewTrainingName">Nama pelatihan baru (khusus data pegawai)</label><input id="adminNewTrainingName" name="name" maxlength="300" placeholder="Isi jika pelatihan belum ada di katalog"></div>
+        <div class="admin-add-bottom"><div class="admin-field"><label for="adminAssignStatus">Status</label><select name="status" id="adminAssignStatus"><option value="yes">Sudah</option><option value="no">Belum</option></select></div><button type="submit" class="admin-btn green">+ Simpan pelatihan</button></div>
+        <p id="adminFormError" class="error-live" role="alert"></p>
+      </form></div>
+      <div class="admin-record-header"><h3>Riwayat pelatihan pegawai</h3><span>${assigned.length} pelatihan</span></div>
+      <input id="adminStatusQuery" class="admin-filter" placeholder="Cari pelatihan pegawai ini..."><div class="admin-training-list" id="adminStatusRows">${list||'<div class="admin-tip">Belum ada pelatihan yang tercatat untuk pegawai ini.</div>'}</div>
+      <div class="admin-actions"><button class="admin-btn outline" data-admin="close">Selesai &amp; perbarui tampilan</button></div>`);
   }
   function linkForm(sibKey){const sib=(state.raw.sibEntries||[]).find(s=>s.key===sibKey);if(!sib)return;
     const people=(state.raw.people||[]).filter(p=>(p.professions||[]).length);
@@ -88,13 +112,19 @@
         result=await API().call('savePerson',state.token,{id:form.dataset.id||'',name:data.get('name'),unit:data.get('unit'),status:data.get('status'),program:data.get('program'),nip:data.get('nip'),nik:data.get('nik'),professions:prof});
       }else if(form.id==='adminProfessionForm')result=await API().call('saveProfession',state.token,{name:data.get('name')});
       else if(form.id==='adminTrainingForm')result=await API().call('saveTraining',state.token,{name:data.get('name'),type:data.get('type'),profession:data.get('profession'),jpl:Number(data.get('jpl')||0),link:data.get('link')||''});
+      else if(form.id==='adminAssignTrainingForm'){
+        const personId=form.dataset.id,trainingId=data.get('trainingId'),name=String(data.get('name')||'').trim(),status=data.get('status');
+        if(name)result=await API().call('savePersonTraining',state.token,{personId,name,status});
+        else if(trainingId)result=await API().call('setTrainingStatus',state.token,{personId,trainingId,status});
+        else throw Error('Pilih pelatihan dari katalog atau isi nama pelatihan baru.');
+      }
       else if(form.id==='adminLinkForm')result=await API().call('linkSibangkom',state.token,{sibKey:form.dataset.key,personId:data.get('personId')});
       else if(form.id==='adminPasswordForm'){
         if(data.get('next')!==data.get('confirm'))throw Error('Konfirmasi password belum sama.');
         await API().call('changeAdminPassword',state.token,data.get('old'),data.get('next'));closeModal();await logout();toast('Password diganti. Silakan login dengan password baru.');return;
       }
       if(!result?.ok)throw Error('Penyimpanan gagal, coba lagi.');
-      closeModal();toast('Tersimpan! Data lagi disinkronkan...');await refreshAfterSave();
+      state.dirty=false;closeModal();toast('Tersimpan! Data lagi disinkronkan...');await refreshAfterSave();
     }catch(e){if(error)error.textContent=e.message;else toast(e.message);if(button){button.disabled=false;button.textContent='Coba simpan lagi'}}finally{state.busy=false}
   }
   async function refreshAfterSave(){API().clearCache();const data=await API().call('getPublicData',true);API().writeCache(data);window.location.reload()}
@@ -103,6 +133,24 @@
       if(!done){p.completed.push(trainingId);p.notCompleted=p.notCompleted.filter(id=>id!==trainingId)}else{p.completed=p.completed.filter(id=>id!==trainingId);if(!p.notCompleted.includes(trainingId))p.notCompleted.push(trainingId)}
       API().clearCache();toast('Status tersimpan di Sheet.');
     }catch(e){toast(e.message)}finally{state.busy=false;button.disabled=false}
+  }
+  async function updateTrainingStatus(personId,trainingId,status,select){
+    if(state.busy){select.value=select.dataset.savedValue||'unknown';return;}
+    const p=(state.raw.people||[]).find(x=>x.id===personId);if(!p)return;
+    const previous=select.dataset.savedValue||((p.completed||[]).includes(trainingId)?'yes':(p.notCompleted||[]).includes(trainingId)?'no':'unknown');
+    state.busy=true;state.statusBusy=true;select.disabled=true;
+    try{
+      const result=await API().call('setTrainingStatus',state.token,{personId,trainingId,status});
+      if(!result?.ok)throw Error('Status gagal disimpan.');
+      p.completed=(p.completed||[]).filter(id=>id!==trainingId);
+      p.notCompleted=(p.notCompleted||[]).filter(id=>id!==trainingId);
+      if(status==='yes')p.completed.push(trainingId);
+      if(status==='no')p.notCompleted.push(trainingId);
+      select.classList.remove('yes','no','unknown');select.classList.add(status);
+      select.dataset.savedValue=status;
+      state.dirty=true;API().clearCache();toast('Status pelatihan tersimpan.');
+    }catch(e){select.value=previous;toast('Gagal menyimpan: '+e.message)}
+    finally{state.busy=false;state.statusBusy=false;select.disabled=false}
   }
   document.addEventListener('click',async e=>{
     const eye=e.target.closest('[data-admin-eye]');
@@ -114,8 +162,11 @@
     const toggleBtn=e.target.closest('[data-admin-toggle]');if(toggleBtn){await toggle(toggleBtn.dataset.adminPerson,toggleBtn.dataset.adminToggle,toggleBtn);return}
     const action=e.target.closest('[data-admin]');if(action){const a=action.dataset.admin;if(a==='close')closeModal();if(a==='add-person')personForm();if(a==='add-training')trainingForm();if(a==='add-profession')professionForm();if(a==='password')passwordForm();if(a==='logout')await logout();if(a==='more'){state.limit+=25;renderListing()}}
   });
-  document.addEventListener('input',e=>{if(e.target.id==='adminQuery'){state.search=e.target.value;state.limit=25;renderListing()}if(e.target.id==='adminLinkQuery'){const q=norm(e.target.value),people=(state.raw?.people||[]).filter(p=>(p.professions||[]).length&&norm([p.name,p.unit].join(' ')).includes(q)).slice(0,80);$('#adminLinkTarget').innerHTML='<option value="">Pilih pegawai</option>'+people.map(p=>`<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.unit)}</option>`).join('')}if(e.target.id==='adminStatusQuery'){const q=norm(e.target.value);document.querySelectorAll('[data-status-name]').forEach(row=>row.hidden=!norm(row.dataset.statusName).includes(q))}});
-  document.addEventListener('change',e=>{if(e.target.id==='adminTrainingType')$('#adminTrainingProfession').disabled=e.target.value!=='profesi'});
+  document.addEventListener('input',e=>{if(e.target.id==='adminQuery'){state.search=e.target.value;state.limit=25;renderListing()}if(e.target.id==='adminLinkQuery'){const q=norm(e.target.value),people=(state.raw?.people||[]).filter(p=>(p.professions||[]).length&&norm([p.name,p.unit].join(' ')).includes(q)).slice(0,80);$('#adminLinkTarget').innerHTML='<option value="">Pilih pegawai</option>'+people.map(p=>`<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.unit)}</option>`).join('')}if(e.target.id==='adminStatusQuery'){const q=norm(e.target.value);document.querySelectorAll('[data-status-name]').forEach(row=>row.hidden=!norm(row.dataset.statusName).includes(q))}if(e.target.id==='adminAssignFilter'){const q=norm(e.target.value);document.querySelectorAll('#adminAssignId option[data-training-option-name]').forEach(option=>{option.hidden=!norm(option.dataset.trainingOptionName).includes(q)});const sel=$('#adminAssignId');if(sel&&sel.selectedOptions[0]?.hidden)sel.value='';}});
+  document.addEventListener('change',e=>{
+    if(e.target.id==='adminTrainingType')$('#adminTrainingProfession').disabled=e.target.value!=='profesi';
+    if(e.target.matches('[data-admin-status-change]'))updateTrainingStatus(e.target.dataset.adminPerson,e.target.dataset.adminStatusChange,e.target.value,e.target);
+  });
   document.addEventListener('submit',e=>{if(!e.target.id.startsWith('admin'))return;e.preventDefault();if(e.target.id==='adminLogin')login(e.target);else submitForm(e.target)});
   $('#adminModalClose').addEventListener('click',closeModal);$('#adminModalBg').addEventListener('click',e=>{if(e.target===$('#adminModalBg'))closeModal()});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#adminModalBg').classList.contains('open'))closeModal()});
