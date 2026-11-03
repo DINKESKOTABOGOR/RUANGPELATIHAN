@@ -4,7 +4,7 @@
 (() => {'use strict';
   const BACKEND_URL=String(window.DINKES_CONFIG?.APPS_SCRIPT_URL||'').trim();
   const GAS=/^https:\/\/script\.google\.com\/macros\/s\/[-\w]+\/exec$/.test(BACKEND_URL);
-  const CACHE_KEY='dinkes_sdm_live_github_2026_v9';
+  const CACHE_KEY='dinkes_sdm_live_github_2026_v10';
   const TTL=Number(window.DINKES_CONFIG?.PUBLIC_CACHE_MS)||180000;
   const allowed=new Set(['getPublicData','getAdminData','loginAdmin','logoutAdmin','changeAdminPassword','savePerson','saveProfession','saveTraining','saveCompletion','linkSibangkom','deleteRecord','getDeletedRecords','restoreRecord']);
   // Read-only public endpoint via ContentService JSONP (tanpa iframe / CORS).
@@ -176,7 +176,7 @@
     // Stale-while-revalidate: data terakhir tampil seketika meskipun cache kadaluarsa.
     show(cached.data,'cached');
     if(Date.now()-cached.savedAt<TTL){status('Data tersimpan · klik Sinkronkan untuk memperbarui')}
-    else {const revision=localRevision;publicFetch().then(data=>{if(localRevision!==revision)return;writeCache(data);raw=data;window.PelatihanAdmin?.setData(data);status('Data dari Google Sheets diperbarui');})
+    else {const revision=localRevision;publicFetch().then(data=>{if(localRevision!==revision)return;writeCache(data);raw=data;window.PelatihanAdmin?.setData(data);window.PelatihanView?.syncFromRaw?.(data);status('Data dari Google Sheets diperbarui');})
       .catch(e=>{status('Menampilkan data tersimpan · koneksi gagal');console.warn('Sinkronisasi gagal:',e.message)});}
   }else{
     publicFetch().then(data=>{writeCache(data);show(data,'live')}).catch(e=>showError('Google Sheets gagal dimuat: '+e.message));
