@@ -121,7 +121,51 @@
       }
     }
     const names=Object.fromEntries((data.trainings||[]).map(t=>[t.id,t.name]));
-    const sibangkom=(data.sibEntries||[]).map(s=>({id:s.key,sourceId:s.personId,name:s.name||'',bidang:s.bidang||'',tim:s.tim||'',done:(s.done||[]).map(id=>names[id]||id),no:(s.no||[]).map(id=>names[id]||id),unknown:(s.unknown||[]).map(id=>names[id]||id)}));
+    // Tab SIBANGKOM adalah sumber RIWAYAT. Kewajiban SIBANGKOM berlaku untuk
+    // seluruh pegawai (termasuk yang BELUM memiliki baris pada tab sumber).
+    // Bangun daftar dari pegawai unik; tambahkan peserta sumber yang belum
+    // memiliki padanan profesi. Jangan gabungkan nama berdasarkan kemiripan.
+    const sibangkom=[],shownSibKeys=new Set(),peopleSeen=new Set();
+    const mandatoryIds=sibTrainings.map(t=>t.id);
+    const fromStatuses=(p)=>{
+      const yes=new Set(p.completed||[]),no=new Set(p.notCompleted||[]);
+      const out={done:[],no:[],unknown:[]};
+      for(const id of mandatoryIds){
+        const key=yes.has(id)?'done':no.has(id)?'no':'unknown';
+        out[key].push(names[id]||id);
+      }
+      return out;
+    };
+    for(const p of data.people||[]){
+      if(!(p.professions||[]).length||peopleSeen.has(p.id))continue;
+      peopleSeen.add(p.id);
+      const src=sibByPerson.get(p.id);
+      if(src)shownSibKeys.add(src.key);
+      const statuses=fromStatuses(p);
+      sibangkom.push({
+        id:src?.key||('PEGAWAI:'+p.id),sourceId:p.id,
+        personViewId:p.id+'|'+p.professions[0],
+        name:p.name||src?.name||'',sourceName:src?.name||'',
+        bidang:src?.bidang||p.unit||'',tim:src?.tim||(p.professions||[]).join(', '),
+        hasSource:!!src, ...statuses
+      });
+    }
+    // Peserta yang memang hanya ada pada tab SIBANGKOM tetap ditampilkan,
+    // agar admin bisa menghubungkannya ke pegawai yang benar.
+    for(const src of data.sibEntries||[]){
+      if(shownSibKeys.has(src.key))continue;
+      sibangkom.push({
+        id:src.key,sourceId:src.personId,name:src.name||'',sourceName:src.name||'',
+        bidang:src.bidang||'',tim:src.tim||'',hasSource:true,
+        done:(src.done||[]).map(id=>names[id]||id),
+        no:(src.no||[]).map(id=>names[id]||id),
+        unknown:(src.unknown||[]).map(id=>names[id]||id)
+      });
+    }
+    // Search key dibuat sekali saat data masuk, bukan saat tiap ketikan.
+    for(const p of sibangkom){
+      p.searchText=norm([p.name,p.sourceName,p.bidang,p.tim].join(' '));
+    }
     return {people,trainings,roleTraining,professions:profiles,
       mandatory:(data.trainings||[]).filter(t=>t.type==='wajib').map(t=>({name:t.name,jpl:Number(t.jpl)||0,link:safeUrl(t.link)})),
       reference:(data.references||[]).map(t=>({role:t.profession||'',competency:t.kompetensi||'',skill:t.teknis||'',title:t.pelatihan||'',link:safeUrl(t.link)})),
