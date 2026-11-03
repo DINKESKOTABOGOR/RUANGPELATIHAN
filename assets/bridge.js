@@ -4,13 +4,13 @@
 (() => {'use strict';
   const BACKEND_URL=String(window.DINKES_CONFIG?.APPS_SCRIPT_URL||'').trim();
   const GAS=/^https:\/\/script\.google\.com\/macros\/s\/[-\w]+\/exec$/.test(BACKEND_URL);
-  const CACHE_KEY='dinkes_sdm_live_github_2026_v4';
-  const TTL=Number(window.DINKES_CONFIG?.PUBLIC_CACHE_MS)||90000;
+  const CACHE_KEY='dinkes_sdm_live_github_2026_v6';
+  const TTL=Number(window.DINKES_CONFIG?.PUBLIC_CACHE_MS)||180000;
   const allowed=new Set(['getPublicData','getAdminData','loginAdmin','logoutAdmin','changeAdminPassword','savePerson','saveProfession','saveTraining','saveCompletion','linkSibangkom']);
   // Read-only public endpoint via ContentService JSONP (tanpa iframe / CORS).
   // Permintaan admin tetap memakai google.script.run dalam iframe terproteksi.
   let callbackSerial=0;
-  function publicFetch(timeoutMs=16000){
+  function publicFetch(timeoutMs=30000,forceFresh=false){
     if(!GAS)return Promise.reject(new Error('Alamat Apps Script belum diisi. Buka assets/config.js.'));
     return new Promise((resolve,reject)=>{
       const cb='DINKES_CB_'+Date.now()+'_'+(++callbackSerial)+'_'+Math.random().toString(36).slice(2,10);
@@ -22,9 +22,9 @@
         finish(null,result.data);
       };
       script.async=true;
-      script.src=BACKEND_URL+'?mode=public&callback='+encodeURIComponent(cb);
+      script.src=BACKEND_URL+'?mode=public&callback='+encodeURIComponent(cb)+(forceFresh?'&fresh=1':'');
       script.onerror=()=>finish(new Error('Endpoint Apps Script tidak dapat dibuka. Periksa URL, akses Anyone, dan deployment terbaru.'));
-      const timeout=setTimeout(()=>finish(new Error('Server belum menjawab setelah '+Math.ceil(timeoutMs/1000)+' detik. Periksa Apps Script → Executions.')),timeoutMs);
+      const timeout=setTimeout(()=>finish(new Error('Pembacaan data Google Sheets belum selesai setelah '+Math.ceil(timeoutMs/1000)+' detik. Coba halaman cek-koneksi.html untuk memeriksa server.')),timeoutMs);
       document.head.appendChild(script);
     });
   }
@@ -40,7 +40,7 @@
     if(connection)return connection;
     connection=new Promise((resolve,reject)=>{
       if(!GAS){reject(new Error('URL Apps Script belum diisi di assets/config.js.'));return}
-      const time=setTimeout(()=>{connection=null;reject(new Error('Penghubung admin tidak terbuka. Periksa FRONTEND_ORIGIN di Code.gs dan izin iframe browser.'))},12000);
+      const time=setTimeout(()=>{connection=null;connectionResolver=null;bridgeFrame?.remove();bridgeFrame=null;reject(new Error('Penghubung admin tidak terbuka. Periksa FRONTEND_ORIGIN di Code.gs dan izin iframe browser.'))},12000);
       const onReady=()=>{clearTimeout(time);resolve(true)};
       // callback dipasang sebelum iframe dibuat; bridge akan mengirim sinyal ready.
       connectionResolver=onReady;
@@ -111,9 +111,20 @@
       reference:(data.references||[]).map(t=>({role:t.profession||'',competency:t.kompetensi||'',skill:t.teknis||'',title:t.pelatihan||'',link:safeUrl(t.link)})),
       sibangkom,source:data.meta?.source||'Google Sheets Dinkes Kota Bogor'};
   }
-  function readCache(){try{return JSON.parse(sessionStorage.getItem(CACHE_KEY)||'null')}catch(e){return null}}
-  function writeCache(data){try{sessionStorage.setItem(CACHE_KEY,JSON.stringify({savedAt:Date.now(),data}))}catch(e){}}
-  function clearCache(){try{sessionStorage.removeItem(CACHE_KEY)}catch(e){}}
+  // Public-only data cache survives closing the tab, with sessionStorage fallback.
+  // Tokens, NIP and NIK are never included in this browser cache.
+  function readCache(){
+    for(const store of [localStorage,sessionStorage]){
+      try{const value=JSON.parse(store.getItem(CACHE_KEY)||'null');if(value?.data?.people&&value?.data?.professions)return value;}catch(e){}
+    }
+    return null;
+  }
+  function writeCache(data){
+    const packed=JSON.stringify({savedAt:Date.now(),data});
+    try{localStorage.setItem(CACHE_KEY,packed);sessionStorage.removeItem(CACHE_KEY);return;}catch(e){}
+    try{sessionStorage.setItem(CACHE_KEY,packed)}catch(e){}
+  }
+  function clearCache(){for(const store of [localStorage,sessionStorage])try{store.removeItem(CACHE_KEY)}catch(e){}}
   function show(data,kind){
     if(loaded)return;
     raw=data;
@@ -133,10 +144,10 @@
   async function refresh(){
     const btn=document.getElementById('refreshSheet');btn.disabled=true;btn.classList.add('sync-busy');
     status('Mengambil perubahan...');
-    try{const data=await publicFetch(18000);writeCache(data);window.location.reload()}
+    try{const data=await publicFetch(30000,true);writeCache(data);window.location.reload()}
     catch(e){status('Sinkronisasi gagal');window.PelatihanView?.toast(e.message);btn.disabled=false;btn.classList.remove('sync-busy')}
   }
-  window.PelatihanBridge={GAS,call,project,getRaw:()=>raw,clearCache,refresh,writeCache};
+  window.PelatihanBridge={GAS,call,project,getRaw:()=>raw,clearCache,refresh,writeCache,warmAdmin:()=>connect().catch(e=>console.warn('Penghubung admin:',e.message))};
   document.getElementById('refreshSheet')?.addEventListener('click',refresh);
   const cached=readCache();
   if(!GAS){showError('Alamat Apps Script belum diisi. Isi assets/config.js dengan URL deployment /exec.');return}

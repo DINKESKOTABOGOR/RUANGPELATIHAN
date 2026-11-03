@@ -8,13 +8,17 @@
   const storeSession=t=>{try{sessionStorage.setItem(authKey,t)}catch(e){}};
   const dropSession=()=>{try{sessionStorage.removeItem(authKey)}catch(e){}};
   const state={raw:null,token:readSession(),auth:false,identities:{},tab:'pegawai',search:'',limit:25,busy:false};
+  // SVG ringan, tanpa library ikon tambahan atau request jaringan.
+  const eyeIcon=visible=>visible
+    ?'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.1A10 10 0 0 1 12 5c5 0 8.6 3.4 10 7a11 11 0 0 1-4.2 5.2"/><path d="M6.5 6.6A11 11 0 0 0 2 12c1.4 3.6 5 7 10 7 1.5 0 2.9-.3 4.1-.9"/></svg>'
+    :'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
   function API(){return window.PelatihanBridge}
   function toast(msg){window.PelatihanView?.toast(msg)}
   function render(){
     const root=$('#adminContent');if(!root)return;
     if(!state.raw){root.innerHTML='<div class="admin-tip">Data sedang disiapkan...</div>';return;}
     if(!state.auth){
-      root.innerHTML=`<form class="admin-login" id="adminLogin"><img src="${esc(window.DINKES_LOGO_SRC||'assets/logo-dinkes.webp')}" alt="Logo Dinkes Kota Bogor"><h2>Halo, Admin! 👋</h2><p>Masuk untuk memperbaiki identitas pegawai, menambah profesi, dan mengelola pelatihan.</p><div class="admin-field"><label for="adminUser">Username</label><input id="adminUser" name="username" required autocomplete="username"></div><div class="admin-field"><label for="adminPassword">Password</label><input id="adminPassword" name="password" type="password" required autocomplete="current-password"></div><p id="adminLoginError" class="error-live" role="alert"></p><button type="submit" class="admin-btn" style="width:100%">Masuk ke panel admin</button><div class="admin-tip">Identitas NIP/NIK hanya ditampilkan setelah login. Perubahan disimpan ke Sheet tambahan APP_*.</div></form>`;
+      root.innerHTML=`<form class="admin-login" id="adminLogin"><img src="${esc(window.DINKES_LOGO_SRC||'assets/logo-dinkes.webp')}" alt="Logo Dinkes Kota Bogor"><h2>Halo, Admin! 👋</h2><p>Masuk untuk memperbaiki identitas pegawai, menambah profesi, dan mengelola pelatihan.</p><div class="admin-field"><label for="adminUser">Username</label><input id="adminUser" name="username" required autocomplete="username"></div><div class="admin-field"><label for="adminPassword">Password</label><div class="admin-password-wrap"><input id="adminPassword" name="password" type="password" required autocomplete="current-password"><button class="admin-eye" type="button" data-admin-eye="adminPassword" aria-label="Tampilkan password" title="Lihat password" aria-pressed="false">${eyeIcon(false)}</button></div></div><p id="adminLoginError" class="error-live" role="alert"></p><button type="submit" class="admin-btn" style="width:100%">Masuk ke panel admin</button><div class="admin-tip">Identitas NIP/NIK hanya ditampilkan setelah login. Perubahan disimpan ke Sheet tambahan APP_*.</div></form>`;
       if(!API()?.GAS)$('#adminLoginError').textContent='Koneksi Apps Script belum disiapkan. Periksa pengaturan aplikasi.';
       return;
     }
@@ -45,7 +49,7 @@
   }
   async function login(form){if(!API()?.GAS){$('#adminLoginError').textContent='Backend belum tersambung. Periksa URL Apps Script di pengaturan.';return;}
     const btn=form.querySelector('button[type=submit]');btn.disabled=true;btn.textContent='Memeriksa akun...';
-    try{const response=await API().call('loginAdmin',form.elements.username.value,form.elements.password.value);state.token=response.token;storeSession(state.token);await fetchAdmin();render();toast('Berhasil masuk. Selamat bekerja!')}
+    try{const response=await API().call('loginAdmin',form.elements.username.value,form.elements.password.value);state.token=response.token;storeSession(state.token);if(response.identities){state.identities=response.identities;state.auth=true;}else await fetchAdmin();render();toast('Berhasil masuk. Selamat bekerja!')}
     catch(e){$('#adminLoginError').textContent=e.message;btn.disabled=false;btn.textContent='Masuk ke panel admin'}
   }
   async function fetchAdmin(){try{const detail=await API().call('getAdminData',state.token);state.identities=detail.identities||{};state.auth=true}
@@ -54,7 +58,7 @@
     state.auth=false;state.token='';state.identities={};dropSession();render();toast('Berhasil keluar.')}
   function modal(title,content){$('#adminModalTitle').textContent=title;$('#adminModalBody').innerHTML=content;$('#adminModalBg').classList.add('open');document.body.style.overflow='hidden';}
   function closeModal(){$('#adminModalBg').classList.remove('open');$('#adminModalBody').innerHTML='';document.body.style.overflow='';}
-  const field=(name,label,value='',extra='')=>`<div class="admin-field"><label for="a_${name}">${esc(label)}</label><input id="a_${name}" name="${name}" value="${esc(value)}" ${extra}></div>`;
+  const field=(name,label,value='',extra='')=>`<div class="admin-field"><label for="a_${name}">${esc(label)}</label>${/type="password"/.test(extra)?`<div class="admin-password-wrap"><input id="a_${name}" name="${name}" value="${esc(value)}" ${extra}><button class="admin-eye" type="button" data-admin-eye="a_${name}" aria-label="Tampilkan password" title="Lihat password" aria-pressed="false">${eyeIcon(false)}</button></div>`:`<input id="a_${name}" name="${name}" value="${esc(value)}" ${extra}>`}</div>`;
   const actions=(submit='Simpan')=>`<div class="admin-actions"><button type="button" class="admin-btn outline" data-admin="close">Batal</button><button type="submit" class="admin-btn">${submit}</button></div><p id="adminFormError" class="error-live"></p>`;
   function personForm(id=''){
     const p=(state.raw.people||[]).find(x=>x.id===id)||{},ident=state.identities[id]||{};
@@ -101,6 +105,8 @@
     }catch(e){toast(e.message)}finally{state.busy=false;button.disabled=false}
   }
   document.addEventListener('click',async e=>{
+    const eye=e.target.closest('[data-admin-eye]');
+    if(eye){const input=document.getElementById(eye.dataset.adminEye);if(!input)return;const visible=input.type==='password';input.type=visible?'text':'password';eye.innerHTML=eyeIcon(visible);eye.setAttribute('aria-pressed',String(visible));eye.setAttribute('aria-label',visible?'Sembunyikan password':'Tampilkan password');eye.title=visible?'Sembunyikan password':'Lihat password';return;}
     const tab=e.target.closest('[data-admin-tab]');if(tab){state.tab=tab.dataset.adminTab;state.search='';state.limit=25;render();return}
     const edit=e.target.closest('[data-admin-edit]');if(edit){personForm(edit.dataset.adminEdit);return}
     const mark=e.target.closest('[data-admin-status]');if(mark){statusForm(mark.dataset.adminStatus);return}

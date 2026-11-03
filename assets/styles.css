@@ -190,3 +190,11 @@ button,input,select{font:inherit}
 @media(max-width:1080px){#view-dashboard .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#view-dashboard .kpi:nth-child(2){border-right:0}#view-dashboard .kpi:nth-child(-n+2){border-bottom:1px solid #dce7f0}#view-dashboard .split-grid{grid-template-columns:1fr;gap:30px}}
 @media(max-width:520px){#view-dashboard .kpi{padding:15px 12px}#view-dashboard .kpi-value{font-size:27px}#view-dashboard .section-heading{align-items:flex-start}#view-dashboard .section-heading .link-btn{font-size:11px}}
 @media(prefers-reduced-motion:reduce){#view-dashboard .kpi-value{animation:none}}
+
+/* Tombol tampil/sembunyikan sandi: hanya di panel admin */
+.admin-password-wrap{position:relative;display:flex;align-items:center}
+.admin-password-wrap input{width:100%;padding-right:51px!important}
+.admin-eye{position:absolute;right:7px;top:50%;transform:translateY(-50%);height:36px;width:39px;display:grid;place-items:center;border:0;border-radius:9px;background:transparent;color:#667e95;cursor:pointer;z-index:1}
+.admin-eye:hover,.admin-eye:focus-visible{color:#247fbe;background:#edf6fc;outline:none}
+.admin-eye:focus-visible{box-shadow:0 0 0 2px #96c9ea}
+@media(prefers-reduced-motion:reduce){.admin-eye{transition:none}}
