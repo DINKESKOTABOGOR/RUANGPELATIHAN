@@ -8,7 +8,7 @@
 <title>Ruang Pelatihan | Dinas Kesehatan Kota Bogor</title>
 <link rel="icon" type="image/webp" href="assets/logo-dinkes.webp">
 <link rel="preconnect" href="https://script.google.com" crossorigin>
-<link rel="stylesheet" href="assets/styles.css?v=20261103e">
+<link rel="stylesheet" href="assets/styles.css?v=20261103d">
 
 <meta name="theme-color" content="#f4f8fc"><meta name="description" content="Portal pelatihan pegawai Dinas Kesehatan Kota Bogor. Cari pegawai, lihat kebutuhan pelatihan, dan temukan pembelajaran per profesi.">
 </head>
@@ -33,7 +33,7 @@
 <div class="mobile-dim" id="mobileDim"></div>
 <main class="main">
   <header class="topbar">
-    <div style="display:flex;gap:12px;align-items:center"><button class="top-btn icon-only desktop-sidebar-toggle" id="sidebarToggle" type="button" title="Sembunyikan menu samping" aria-label="Sembunyikan menu samping" aria-expanded="true"><span data-icon="menu"></span></button><button class="top-btn icon-only menu-trigger" id="mobileMenu" title="Buka menu"><span data-icon="menu"></span></button><div><div class="eyebrow" id="topEyebrow">DINAS KESEHATAN · KOTA BOGOR</div><h1 class="page-title" id="topPage">Ringkasan Data</h1></div></div>
+    <div style="display:flex;gap:12px;align-items:center"><button class="top-btn icon-only menu-trigger" id="mobileMenu" title="Buka menu"><span data-icon="menu"></span></button><div><div class="eyebrow" id="topEyebrow">DINAS KESEHATAN · KOTA BOGOR</div><h1 class="page-title" id="topPage">Ringkasan Data</h1></div></div>
     <div class="top-actions"><button class="top-btn search-action" id="globalSearch"><span data-icon="search"></span><span>Cari pegawai</span><small class="shortcut">Ctrl K</small></button><button class="top-btn export-action" id="exportBtn" title="Ekspor daftar pegawai"><span data-icon="download"></span><span>Ekspor CSV</span></button><button class="top-btn" id="refreshSheet" title="Ambil pembaruan dari Google Sheets"><span data-icon="refresh-cw"></span> <span>Sinkronkan</span></button></div>
   </header>
   <div class="source-strip"><span class="source-name" title="Sumber data Google Sheets">Sumber: <strong id="sourceFilename">Google Sheets Dinkes Kota Bogor</strong></span><span class="live-sync" id="syncText">Menghubungkan Google Sheets...</span></div>
@@ -70,17 +70,16 @@
     <div class="panel"><div class="ref-tabs"><button class="ref-tab active" data-ref="wajib">Pembelajaran Wajib</button><button class="ref-tab" data-ref="jpl">Referensi 20 JPL</button></div><div id="referenceContent"></div></div>
   </section>
 
-<section class="section-view" id="view-admin"><div class="admin-section-tools"><span class="pill-label" id="adminLabel">KHUSUS ADMIN</span></div><div id="adminContent"></div></section>
+<section class="section-view" id="view-admin"><div class="view-intro"><div><h2>Panel Admin</h2><p>Rapikan pegawai, profesi, dan pelatihan tanpa mengubah sheet profesi asal.</p></div><span class="pill-label" id="adminLabel">KHUSUS ADMIN</span></div><div id="adminContent"></div></section>
   <footer class="footer">Ruang Pelatihan Dinkes Kota Bogor &nbsp; / &nbsp; Sumber: Google Sheets pemetaan pelatihan<br><span class="copyright">&copy; 2026 @benrama</span></footer>
 </main>
 </div>
 <div class="drawer-overlay" id="drawerOverlay"></div><aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Detail pegawai"><div class="drawer-head" id="drawerHead"></div><div class="drawer-body" id="drawerBody"></div></aside>
 <div class="admin-modal-bg" id="adminModalBg" role="presentation"><div class="admin-modal" role="dialog" aria-modal="true" aria-label="Pengelolaan data"><div class="admin-modal-head"><h2 id="adminModalTitle"></h2><button type="button" id="adminModalClose" aria-label="Tutup">×</button></div><div id="adminModalBody"></div></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div><button class="scrolltop" id="scrollTop" aria-label="Kembali ke atas"><span data-icon="arrow-up"></span></button>
-<script src="assets/search-select.js?v=20261103e"></script>
-<script src="assets/config.js?v=20261103e"></script>
-<script src="assets/app.js?v=20261103e"></script>
-<script src="assets/admin.js?v=20261103e"></script>
-<script src="assets/bridge.js?v=20261103e"></script>
+<script src="assets/config.js?v=20261103d"></script>
+<script src="assets/app.js?v=20261103d"></script>
+<script src="assets/admin.js?v=20261103d"></script>
+<script src="assets/bridge.js?v=20261103d"></script>
 </body>
 </html>

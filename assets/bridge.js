@@ -4,9 +4,9 @@
 (() => {'use strict';
   const BACKEND_URL=String(window.DINKES_CONFIG?.APPS_SCRIPT_URL||'').trim();
   const GAS=/^https:\/\/script\.google\.com\/macros\/s\/[-\w]+\/exec$/.test(BACKEND_URL);
-  const CACHE_KEY='dinkes_sdm_live_github_2026_v7_scope';
+  const CACHE_KEY='dinkes_sdm_live_github_2026_v7';
   const TTL=Number(window.DINKES_CONFIG?.PUBLIC_CACHE_MS)||180000;
-  const allowed=new Set(['getPublicData','getAdminData','loginAdmin','logoutAdmin','changeAdminPassword','savePerson','saveProfession','saveTraining','saveCompletion','setTrainingStatus','linkSibangkom']);
+  const allowed=new Set(['getPublicData','getAdminData','loginAdmin','logoutAdmin','changeAdminPassword','savePerson','saveProfession','saveTraining','saveCompletion','linkSibangkom']);
   // Read-only public endpoint via ContentService JSONP (tanpa iframe / CORS).
   // Permintaan admin tetap memakai google.script.run dalam iframe terproteksi.
   let callbackSerial=0;
@@ -70,7 +70,7 @@
   });
   async function call(method,...args){
     if(!allowed.has(method))throw new Error('Operasi tidak diizinkan.');
-    if(method==='getPublicData')return publicFetch();
+    if(method==='getPublicData')return publicFetch(30000,args[0]===true);
     await connect();
     return new Promise((resolve,reject)=>{
       if(!peer||!peerOrigin){reject(new Error('Penghubung Apps Script belum siap.'));return}
@@ -85,37 +85,23 @@
   function project(data){
     const profiles=(data.professions||[]).filter(Boolean);
     const trainings=[],toNum=new Map(),byName=new Map(),roleTraining=Object.fromEntries(profiles.map(p=>[p,[]]));
-    // Sekali bangun indeks; judul sama tetap satu baris pada setiap profesi.
-    // Kode asli tidak diganti, sehingga status dari sumber dan APP_RIWAYAT tetap terbaca.
     for(const t of (data.trainings||[])){
-      const name=String(t.name||'').trim();if(!name||t.type==='individu')continue;
-      const sourceRoles=t.type==='profesi'?(Array.isArray(t.professions)&&t.professions.length?t.professions:[t.profession]):profiles;
-      const roles=sourceRoles.filter(r=>profiles.includes(r));if(!roles.length)continue;
-      const key=norm(name).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
-      let entry=byName.get(key);
+      if(t.type!=='profesi'||!profiles.includes(t.profession))continue;
+      const name=String(t.name||'').trim();if(!name)continue;
+      const key=norm(name);let entry=byName.get(key);
       if(!entry){entry={id:trainings.length,name,roles:[]};byName.set(key,entry);trainings.push(entry)}
-      for(const role of roles){
-        if(!entry.roles.includes(role))entry.roles.push(role);
-        if(!roleTraining[role].includes(entry.id))roleTraining[role].push(entry.id);
-      }
+      if(!entry.roles.includes(t.profession))entry.roles.push(t.profession);
+      if(!roleTraining[t.profession].includes(entry.id))roleTraining[t.profession].push(entry.id);
       toNum.set(t.id,entry.id);
     }
     const people=[];
-    const individualById=new Map((data.trainings||[]).filter(t=>t.type==='individu').map(t=>[t.id,t]));
     for(const p of (data.people||[])){
-      const sourceCompleted=new Set(p.completed||[]),sourceNo=new Set(p.notCompleted||[]);
-      const completedIds=new Set([...sourceCompleted].map(id=>toNum.get(id)).filter(id=>id!==undefined));
-      const noIds=new Set([...sourceNo].map(id=>toNum.get(id)).filter(id=>id!==undefined));
       for(const role of (p.professions||[])){
         if(!profiles.includes(role))continue;
-        const valid=roleTraining[role]||[];
-        const yes=valid.filter(id=>completedIds.has(id));
-        const no=valid.filter(id=>noIds.has(id)&&!completedIds.has(id));
-        const extras=[...new Set([...sourceCompleted,...sourceNo])].filter(id=>individualById.has(id)).map(id=>{
-          const t=individualById.get(id);
-          return {id,name:t.name||'Pelatihan tambahan',status:sourceCompleted.has(id)?'yes':'no'};
-        });
-        people.push({id:p.id+'|'+role,sourceId:p.id,name:p.name||'Nama belum diisi',role,unit:p.unit||'Unit belum diisi',employment:p.status||'',program:p.program||'',nip:'',yes,no,extras});
+        const valid=new Set(roleTraining[role]);
+        const yes=[...new Set((p.completed||[]).map(id=>toNum.get(id)).filter(id=>valid.has(id)))];
+        const no=[...new Set((p.notCompleted||[]).map(id=>toNum.get(id)).filter(id=>valid.has(id)&&!yes.includes(id)))];
+        people.push({id:p.id+'|'+role,sourceId:p.id,name:p.name||'Nama belum diisi',role,unit:p.unit||'Unit belum diisi',employment:p.status||'',program:p.program||'',nip:'',yes,no});
       }
     }
     const names=Object.fromEntries((data.trainings||[]).map(t=>[t.id,t.name]));
@@ -169,7 +155,7 @@
     // Stale-while-revalidate: data terakhir tampil seketika meskipun cache kadaluarsa.
     show(cached.data,'cached');
     if(Date.now()-cached.savedAt<TTL){status('Data tersimpan · klik Sinkronkan untuk memperbarui')}
-    else publicFetch().then(data=>{writeCache(data);status('Data terbaru tersedia · klik Sinkronkan');})
+    else publicFetch().then(data=>{writeCache(data);raw=data;window.PelatihanAdmin?.setData(data);status('Data dari Google Sheets diperbarui');})
       .catch(e=>{status('Menampilkan data tersimpan · koneksi gagal');console.warn('Sinkronisasi gagal:',e.message)});
   }else{
     publicFetch().then(data=>{writeCache(data);show(data,'live')}).catch(e=>showError('Google Sheets gagal dimuat: '+e.message));
