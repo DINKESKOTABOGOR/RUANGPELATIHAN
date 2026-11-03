@@ -7,6 +7,28 @@
   const CACHE_KEY='dinkes_sdm_live_github_2026_v4';
   const TTL=Number(window.DINKES_CONFIG?.PUBLIC_CACHE_MS)||90000;
   const allowed=new Set(['getPublicData','getAdminData','loginAdmin','logoutAdmin','changeAdminPassword','savePerson','saveProfession','saveTraining','saveCompletion','linkSibangkom']);
+  // Read-only public endpoint via ContentService JSONP (tanpa iframe / CORS).
+  // Permintaan admin tetap memakai google.script.run dalam iframe terproteksi.
+  let callbackSerial=0;
+  function publicFetch(timeoutMs=16000){
+    if(!GAS)return Promise.reject(new Error('Alamat Apps Script belum diisi. Buka assets/config.js.'));
+    return new Promise((resolve,reject)=>{
+      const cb='DINKES_CB_'+Date.now()+'_'+(++callbackSerial)+'_'+Math.random().toString(36).slice(2,10);
+      const script=document.createElement('script');
+      let settled=false;
+      const finish=(err,value)=>{if(settled)return;settled=true;clearTimeout(timeout);delete window[cb];script.remove();if(err)reject(err);else resolve(value)};
+      window[cb]=result=>{
+        if(!result||result.ok!==true||!result.data)return finish(new Error(result?.error||'Google Sheets belum bisa dibaca.'));
+        finish(null,result.data);
+      };
+      script.async=true;
+      script.src=BACKEND_URL+'?mode=public&callback='+encodeURIComponent(cb);
+      script.onerror=()=>finish(new Error('Endpoint Apps Script tidak dapat dibuka. Periksa URL, akses Anyone, dan deployment terbaru.'));
+      const timeout=setTimeout(()=>finish(new Error('Server belum menjawab setelah '+Math.ceil(timeoutMs/1000)+' detik. Periksa Apps Script → Executions.')),timeoutMs);
+      document.head.appendChild(script);
+    });
+  }
+
   const channel='dinkes-'+(globalThis.crypto?.randomUUID?.()||(''+Date.now()+Math.random()).replace('.',''));
   const outstanding=new Map();
   let peer=null,peerOrigin='',raw=null,loaded=false,bridgeFrame=null,connection=null,serial=0;
@@ -18,7 +40,7 @@
     if(connection)return connection;
     connection=new Promise((resolve,reject)=>{
       if(!GAS){reject(new Error('URL Apps Script belum diisi di assets/config.js.'));return}
-      const time=setTimeout(()=>{reject(new Error('Apps Script tidak merespons. Cek URL deployment dan izin aksesnya.'))},28000);
+      const time=setTimeout(()=>{connection=null;reject(new Error('Penghubung admin tidak terbuka. Periksa FRONTEND_ORIGIN di Code.gs dan izin iframe browser.'))},12000);
       const onReady=()=>{clearTimeout(time);resolve(true)};
       // callback dipasang sebelum iframe dibuat; bridge akan mengirim sinyal ready.
       connectionResolver=onReady;
@@ -26,6 +48,7 @@
       bridgeFrame.title='Penghubung Google Sheets';bridgeFrame.setAttribute('aria-hidden','true');
       bridgeFrame.style.cssText='position:absolute;width:1px;height:1px;border:0;opacity:0;pointer-events:none;left:-9999px;';
       bridgeFrame.src=BACKEND_URL+'?bridge=1&channel='+encodeURIComponent(channel);
+      bridgeFrame.onerror=()=>{clearTimeout(time);connection=null;reject(new Error('Halaman penghubung admin diblokir browser.'))};
       document.body.appendChild(bridgeFrame);
     });
     return connection;
@@ -47,11 +70,12 @@
   });
   async function call(method,...args){
     if(!allowed.has(method))throw new Error('Operasi tidak diizinkan.');
+    if(method==='getPublicData')return publicFetch();
     await connect();
     return new Promise((resolve,reject)=>{
       if(!peer||!peerOrigin){reject(new Error('Penghubung Apps Script belum siap.'));return}
       const id=++serial;
-      const timeout=setTimeout(()=>{outstanding.delete(id);reject(new Error('Permintaan terlalu lama. Coba sinkronkan lagi.'))},55000);
+      const timeout=setTimeout(()=>{outstanding.delete(id);reject(new Error('Permintaan admin terlalu lama. Buka Apps Script → Executions untuk melihat error.'))},30000);
       outstanding.set(id,{resolve,reject,timeout});
       peer.postMessage({scope:'DINKES_BRIDGE_V1',channel,type:'request',id,method,args},peerOrigin);
     });
@@ -94,7 +118,7 @@
     if(loaded)return;
     raw=data;
     document.getElementById('sourceFilename').textContent='Google Sheets · Rekapitulasi Pemetaan Pelatihan';
-    document.getElementById('syncText').textContent=kind==='cached'?'Data tersimpan · bisa disinkronkan':'Google Sheets tersambung';
+    document.getElementById('syncText').textContent=kind==='cached'?'Data tersimpan · sinkronisasi berjalan':'Google Sheets tersambung';
     startApp(project(data));loaded=true;
     window.PelatihanAdmin?.setData(data);
     document.getElementById('loadingLive')?.remove();
@@ -105,19 +129,24 @@
     const root=document.querySelector('.loading-card-live');
     let btn=document.getElementById('retryLive');if(!btn){btn=document.createElement('button');btn.id='retryLive';btn.className='admin-btn';btn.textContent='Coba lagi';btn.style.marginTop='17px';btn.onclick=()=>window.location.reload();root?.appendChild(btn)}
   }
+  function status(msg){const el=document.getElementById('syncText');if(el)el.textContent=msg;}
   async function refresh(){
     const btn=document.getElementById('refreshSheet');btn.disabled=true;btn.classList.add('sync-busy');
-    document.getElementById('syncText').textContent='Mengambil perubahan...';
-    try{const data=await call('getPublicData',true);writeCache(data);window.location.reload()}
-    catch(e){document.getElementById('syncText').textContent='Gagal menyinkronkan';window.PelatihanView?.toast(e.message);btn.disabled=false;btn.classList.remove('sync-busy')}
+    status('Mengambil perubahan...');
+    try{const data=await publicFetch(18000);writeCache(data);window.location.reload()}
+    catch(e){status('Sinkronisasi gagal');window.PelatihanView?.toast(e.message);btn.disabled=false;btn.classList.remove('sync-busy')}
   }
   window.PelatihanBridge={GAS,call,project,getRaw:()=>raw,clearCache,refresh,writeCache};
   document.getElementById('refreshSheet')?.addEventListener('click',refresh);
   const cached=readCache();
-  if(!GAS){showError('Sambungkan URL Apps Script terlebih dahulu di assets/config.js. Tidak perlu upload Excel.');return}
-  // Cache langsung ditampilkan untuk menghemat waktu kunjungan ulang.
-  if(cached?.data && Date.now()-cached.savedAt<TTL){show(cached.data,'cached');connect().catch(e=>{document.getElementById('syncText').textContent='Koneksi Apps Script gagal';console.warn(e)});}
-  else{
-    call('getPublicData',false).then(data=>{writeCache(data);show(data,'live')}).catch(e=>showError('Tidak bisa membaca Google Sheets: '+e.message));
+  if(!GAS){showError('Alamat Apps Script belum diisi. Isi assets/config.js dengan URL deployment /exec.');return}
+  if(cached?.data){
+    // Stale-while-revalidate: data terakhir tampil seketika meskipun cache kadaluarsa.
+    show(cached.data,'cached');
+    if(Date.now()-cached.savedAt<TTL){status('Data tersimpan · klik Sinkronkan untuk memperbarui')}
+    else publicFetch().then(data=>{writeCache(data);status('Data terbaru tersedia · klik Sinkronkan');})
+      .catch(e=>{status('Menampilkan data tersimpan · koneksi gagal');console.warn('Sinkronisasi gagal:',e.message)});
+  }else{
+    publicFetch().then(data=>{writeCache(data);show(data,'live')}).catch(e=>showError('Google Sheets gagal dimuat: '+e.message));
   }
 })();
