@@ -34,7 +34,7 @@
     const q=norm(state.search),people=(state.raw.people||[]).filter(p=>(p.professions||[]).length),train=state.raw.trainings||[],sib=state.raw.sibEntries||[];
     let list=[];
     if(state.tab==='pegawai')list=people.filter(p=>norm([p.name,p.unit,...(p.professions||[])].join(' ')).includes(q)).sort((a,b)=>a.name.localeCompare(b.name,'id'));
-    else if(state.tab==='pelatihan')list=train.filter(t=>norm([t.name,t.profession,t.type].join(' ')).includes(q)).sort((a,b)=>a.name.localeCompare(b.name,'id'));
+    else if(state.tab==='pelatihan')list=train.filter(t=>norm([t.name,t.profession,...(t.professions||[]),t.type].join(' ')).includes(q)).sort((a,b)=>a.name.localeCompare(b.name,'id'));
     else list=sib.filter(s=>norm([s.name,s.bidang,s.tim].join(' ')).includes(q));
     const slice=list.slice(0,state.limit);
     const row=x=>{
@@ -42,7 +42,7 @@
         const identity=state.identities[x.id]||{};
         return `<article class="admin-record"><div><h4>${esc(x.name)}</h4><p>${esc(x.unit)} · ${esc((x.professions||[]).join(', '))}</p><div class="admin-identity ${identity.nip||identity.nik?'':'weak'}">${identity.nip?'NIP: '+esc(identity.nip):identity.nik?'NIK: '+esc(identity.nik):'NIP/NIK belum lengkap'}</div></div><div><button data-admin-edit="${esc(x.id)}">Perbaiki</button> <button data-admin-status="${esc(x.id)}">Kelola pelatihan</button></div></article>`;
       }
-      if(state.tab==='pelatihan')return `<article class="admin-record"><div><h4>${esc(x.name)}</h4><p>${esc(x.profession||x.type)} · ${esc(x.jpl||'')} ${x.jpl?'JPL':''}</p></div><span class="admin-identity">${esc(x.type)}</span></article>`;
+      if(state.tab==='pelatihan')return `<article class="admin-record"><div><h4>${esc(x.name)}</h4><p>${esc(x.type==='wajib'||x.type==='sibangkom'?'Wajib · semua profesi':(x.professions||[x.profession]).join(', ')||x.type)} · ${esc(x.jpl||'')} ${x.jpl?'JPL':''}</p></div><span class="admin-identity">${esc(x.type)}</span></article>`;
       return `<article class="admin-record"><div><h4>${esc(x.name)}</h4><p>${esc(x.bidang||'Bidang belum diisi')} · ${esc(x.tim||'Tim belum diisi')}</p><div class="admin-identity">${people.some(p=>p.id===x.personId)?'Sudah cocok':'Perlu dicocokkan'}</div></div><button data-admin-link="${esc(x.key)}">${people.some(p=>p.id===x.personId)?'Ganti pasangan':'Cocokkan'}</button></article>`;
     };
     root.innerHTML=`<div style="color:#8393a7;font-size:12px;margin-bottom:12px">Menampilkan ${Math.min(slice.length,list.length).toLocaleString('id-ID')} dari ${list.length.toLocaleString('id-ID')} data</div><div class="admin-list">${slice.map(row).join('')||'<div class="admin-tip">Tidak ada data yang cocok.</div>'}</div>${list.length>slice.length?'<div class="admin-more"><button class="admin-btn outline" data-admin="more">Tampilkan lebih banyak</button></div>':''}`;
@@ -56,7 +56,7 @@
     catch(e){state.auth=false;state.token='';state.identities={};dropSession();throw e}}
   async function logout(){try{if(state.token)await API().call('logoutAdmin',state.token)}catch(e){}
     state.auth=false;state.token='';state.identities={};dropSession();render();toast('Berhasil keluar.')}
-  function modal(title,content){$('#adminModalTitle').textContent=title;$('#adminModalBody').innerHTML=content;$('#adminModalBg').classList.add('open');document.body.style.overflow='hidden';}
+  function modal(title,content){$('#adminModalTitle').textContent=title;$('#adminModalBody').innerHTML=content;$('#adminModalBg').classList.add('open');document.body.style.overflow='hidden';window.SearchableSelect?.enhance($('#adminModalBody'));}
   function closeModal(){if(state.statusBusy){toast('Status sedang disimpan, coba tutup setelah selesai.');return;}$('#adminModalBg').classList.remove('open');$('#adminModalBody').innerHTML='';document.body.style.overflow='';if(state.dirty){state.dirty=false;refreshAfterSave().catch(e=>toast('Sinkronisasi gagal: '+e.message));}}
   const field=(name,label,value='',extra='')=>`<div class="admin-field"><label for="a_${name}">${esc(label)}</label>${/type="password"/.test(extra)?`<div class="admin-password-wrap"><input id="a_${name}" name="${name}" value="${esc(value)}" ${extra}><button class="admin-eye" type="button" data-admin-eye="a_${name}" aria-label="Tampilkan password" title="Lihat password" aria-pressed="false">${eyeIcon(false)}</button></div>`:`<input id="a_${name}" name="${name}" value="${esc(value)}" ${extra}>`}</div>`;
   const actions=(submit='Simpan')=>`<div class="admin-actions"><button type="button" class="admin-btn outline" data-admin="close">Batal</button><button type="submit" class="admin-btn">${submit}</button></div><p id="adminFormError" class="error-live"></p>`;
@@ -66,33 +66,53 @@
     modal(id?'Perbaiki data pegawai':'Tambah pegawai',`<form id="adminPersonForm" data-id="${esc(id)}"><div class="admin-form-grid">${field('name','Nama lengkap',p.name||'','required maxlength="200"')}${field('unit','Unit kerja',p.unit||'','required maxlength="200"')}<div class="admin-field"><label>Status kepegawaian</label><select name="status">${['PNS/CPNS','PPPK','NON-ASN','LAINNYA'].map(x=>`<option ${x===(p.status||'')?'selected':''}>${x}</option>`).join('')}</select></div>${field('program','Program / tanggung jawab',p.program||'')}${field('nip','NIP (18 angka)',ident.nip||'','inputmode="numeric" pattern="[0-9]{18}" maxlength="18"')}${field('nik','NIK (16 angka)',ident.nik||'','inputmode="numeric" pattern="[0-9]{16}" maxlength="16"')}</div><div class="admin-field"><label>Profesi (boleh lebih dari satu)</label><div class="admin-checkboxes">${profs}</div></div><div class="admin-tip">Data sumber tetap aman. Perubahan ini disimpan ke APP_PEGAWAI di Google Sheets.</div>${actions(id?'Simpan perbaikan':'Tambah pegawai')}</form>`);
   }
   function professionForm(){modal('Tambah profesi',`<form id="adminProfessionForm">${field('name','Nama profesi baru','','required maxlength="60"')}${actions('Tambah profesi')}</form>`)}
-  function trainingForm(){modal('Tambah pelatihan',`<form id="adminTrainingForm"><div class="admin-form-grid">${field('name','Nama pelatihan','','required maxlength="300"')}<div class="admin-field"><label>Jenis data</label><select name="type" id="adminTrainingType"><option value="profesi">Pelatihan profesi</option><option value="sibangkom">SIBANGKOM</option><option value="wajib">Pembelajaran wajib</option></select></div><div class="admin-field"><label>Profesi</label><select name="profession" id="adminTrainingProfession">${(state.raw.professions||[]).map(pr=>`<option value="${esc(pr)}">${esc(pr)}</option>`).join('')}</select></div>${field('jpl','Jumlah JPL','0','type="number" min="0" max="1000"')}${field('link','Link pembelajaran (https://)','','type="url"')}</div>${actions('Tambah pelatihan')}</form>`)}
+  function trainingForm(){
+    const professions=(state.raw.professions||[]).map(pr=>`<label class="admin-prof-item" data-prof-name="${esc(norm(pr))}"><input type="checkbox" name="professions" value="${esc(pr)}"><span>${esc(pr)}</span></label>`).join('');
+    modal('Tambah pelatihan ke katalog',`<form id="adminTrainingForm">
+      <div class="admin-form-grid">
+        ${field('name','Nama pelatihan','','required maxlength="300"')}
+        <div class="admin-field"><label for="adminTrainingScope">Berlaku untuk</label>
+          <select id="adminTrainingScope" name="scope"><option value="wajib">Wajib — semua profesi</option><option value="profesi">Hanya profesi yang dipilih</option></select>
+        </div>
+      </div>
+      <div class="admin-field admin-scope-roles" id="adminScopeRoles" hidden>
+        <label for="adminProfessionSearch">Pilih profesi (bisa lebih dari satu)</label>
+        <input type="search" id="adminProfessionSearch" placeholder="Ketik untuk mencari profesi..." autocomplete="off">
+        <div class="admin-checkboxes admin-prof-options">${professions}</div>
+      </div>
+      <div class="admin-form-grid">
+        ${field('jpl','Jumlah JPL','0','type="number" min="0" max="1000"')}
+        ${field('link','Link pembelajaran (https://)','','type="url"')}
+      </div>
+      <p class="admin-tip">Judul pelatihan diperiksa dengan seluruh katalog sebelum disimpan agar tidak dobel. SIBANGKOM dari data sumber berlaku untuk semua profesi.</p>
+      ${actions('Tambah pelatihan')}
+    </form>`);
+  }
   function passwordForm(){modal('Ganti password admin',`<form id="adminPasswordForm">${field('old','Password sekarang','','type="password" required autocomplete="current-password"')}${field('next','Password baru (min. 10 karakter)','','type="password" minlength="10" required autocomplete="new-password"')}${field('confirm','Ulangi password baru','','type="password" required autocomplete="new-password"')}${actions('Ganti password')}</form>`)}
   function statusForm(id){const p=(state.raw.people||[]).find(x=>x.id===id);if(!p)return;
-    const matching=(state.raw.trainings||[]).filter(t=>
-      t.type==='profesi'&&(p.professions||[]).includes(t.profession)||
-      t.type==='sibangkom'&&p.sib||t.type==='wajib'||t.type==='individu');
-    const assigned=matching.filter(t=>t.type==='profesi'||t.type==='sibangkom'||
-      (p.completed||[]).includes(t.id)||(p.notCompleted||[]).includes(t.id));
+    const applicable=t=>t.type==='wajib'||t.type==='sibangkom'||t.type==='profesi'&&(p.professions||[]).some(role=>(t.professions||[t.profession]).includes(role))||
+      t.type==='individu'&&((p.completed||[]).includes(t.id)||(p.notCompleted||[]).includes(t.id));
+    const rawMatching=(state.raw.trainings||[]).filter(applicable);
     const status=t=>(p.completed||[]).includes(t.id)?'yes':(p.notCompleted||[]).includes(t.id)?'no':'unknown';
+    const rank={yes:3,no:2,unknown:1};
+    // Katalog & rincian pegawai tidak menampilkan judul yang sama dua kali.
+    const distinct=new Map();
+    for(const t of rawMatching){const key=norm(t.name);const old=distinct.get(key);
+      if(!old||rank[status(t)]>rank[status(old)])distinct.set(key,t);}
+    const matching=[...distinct.values()].sort((a,b)=>a.name.localeCompare(b.name,'id'));
     const label={yes:'Sudah',no:'Belum',unknown:'Belum diisi'};
-    const options=matching.slice().sort((a,b)=>a.name.localeCompare(b.name,'id')).map(t=>
-      `<option value="${esc(t.id)}" data-training-option-name="${esc(norm(t.name))}">${esc(t.name)} · ${esc(t.profession||t.type)}</option>`).join('');
-    const list=assigned.slice().sort((a,b)=>a.name.localeCompare(b.name,'id')).map(t=>{
-      const current=status(t);
-      return `<div class="admin-status-row" data-status-name="${esc(norm(t.name))}"><div class="admin-status-label"><strong>${esc(t.name)}</strong><small>${esc(t.profession||(t.type==='individu'?'Pelatihan tambahan':t.type))}</small></div><select class="admin-status-picker ${current}" data-admin-status-change="${esc(t.id)}" data-admin-person="${esc(p.id)}" aria-label="Status ${esc(t.name)}">${Object.entries(label).map(([value,text])=>`<option value="${value}" ${current===value?'selected':''}>${text}</option>`).join('')}</select></div>`;
+    const options=matching.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} · ${esc(t.type==='wajib'||t.type==='sibangkom'?'Wajib':(t.professions||[t.profession]).join(', ')||'Tambahan')}</option>`).join('');
+    const list=matching.map(t=>{const current=status(t);
+      return `<div class="admin-status-row" data-status-name="${esc(norm(t.name))}"><div class="admin-status-label"><strong>${esc(t.name)}</strong><small>${esc(t.type==='wajib'||t.type==='sibangkom'?'Wajib · semua profesi':t.type==='individu'?'Pelatihan lama':(t.professions||[t.profession]).join(', '))}</small></div><select class="admin-status-picker ${current}" data-admin-status-change="${esc(t.id)}" data-admin-person="${esc(p.id)}" data-saved-value="${current}" aria-label="Status ${esc(t.name)}">${Object.entries(label).map(([value,text])=>`<option value="${value}" ${current===value?'selected':''}>${text}</option>`).join('')}</select></div>`;
     }).join('');
-    modal('Kelola pelatihan · '+p.name,`<div class="admin-tip">Perubahan status langsung disimpan di Google Sheets. Pilih <b>Sudah</b>, <b>Belum</b>, atau <b>Belum diisi</b>. Data sumber profesi tidak ditimpa.</div>
-      <div class="admin-add-training"><h3>+ Tambah pelatihan untuk ${esc(p.name)}</h3>
+    modal('Kelola pelatihan · '+p.name,`<div class="admin-tip">Pilih pelatihan yang tersedia dalam katalog. Perubahan status disimpan ke APP_RIWAYAT, bukan ke sheet profesi asal.</div>
+      <div class="admin-add-training"><h3>+ Masukkan pelatihan untuk ${esc(p.name)}</h3>
       <form id="adminAssignTrainingForm" data-id="${esc(p.id)}">
-        <div class="admin-field"><label for="adminAssignFilter">Cari dari katalog pelatihan</label><input id="adminAssignFilter" type="search" placeholder="Cari judul pelatihan yang tersedia..."></div>
-        <div class="admin-field"><label for="adminAssignId">Pilih pelatihan yang tersedia</label><select id="adminAssignId" name="trainingId"><option value="">— Pilih pelatihan —</option>${options}</select></div>
-        <div class="admin-or">ATAU TAMBAHKAN PELATIHAN BARU</div>
-        <div class="admin-field"><label for="adminNewTrainingName">Nama pelatihan baru (khusus data pegawai)</label><input id="adminNewTrainingName" name="name" maxlength="300" placeholder="Isi jika pelatihan belum ada di katalog"></div>
-        <div class="admin-add-bottom"><div class="admin-field"><label for="adminAssignStatus">Status</label><select name="status" id="adminAssignStatus"><option value="yes">Sudah</option><option value="no">Belum</option></select></div><button type="submit" class="admin-btn green">+ Simpan pelatihan</button></div>
+        <div class="admin-field"><label for="adminAssignId">Cari dan pilih pelatihan dari katalog</label><select id="adminAssignId" name="trainingId" data-searchable="true"><option value="">— Ketik atau pilih pelatihan —</option>${options}</select></div>
+        <div class="admin-add-bottom"><div class="admin-field"><label for="adminAssignStatus">Status</label><select name="status" id="adminAssignStatus"><option value="yes">Sudah</option><option value="no">Belum</option><option value="unknown">Belum diisi</option></select></div><button type="submit" class="admin-btn green">Simpan status</button></div>
         <p id="adminFormError" class="error-live" role="alert"></p>
-      </form></div>
-      <div class="admin-record-header"><h3>Riwayat pelatihan pegawai</h3><span>${assigned.length} pelatihan</span></div>
+      </form><p class="admin-scope-hint">Pelatihan baru ditambahkan lewat tombol <b>+ Tambah pelatihan</b> di Panel Admin.</p></div>
+      <div class="admin-record-header"><h3>Riwayat &amp; daftar pelatihan pegawai</h3><span>${matching.length} pelatihan</span></div>
       <input id="adminStatusQuery" class="admin-filter" placeholder="Cari pelatihan pegawai ini..."><div class="admin-training-list" id="adminStatusRows">${list||'<div class="admin-tip">Belum ada pelatihan yang tercatat untuk pegawai ini.</div>'}</div>
       <div class="admin-actions"><button class="admin-btn outline" data-admin="close">Selesai &amp; perbarui tampilan</button></div>`);
   }
@@ -101,7 +121,7 @@
     modal('Cocokkan peserta SIBANGKOM',`<form id="adminLinkForm" data-key="${esc(sibKey)}"><div class="admin-warning"><strong>${esc(sib.name)}</strong><div>${esc(sib.bidang||'—')} · ${esc(sib.tim||'—')}</div><p>Pastikan orangnya benar sebelum dihubungkan. Jangan hanya mengandalkan nama yang mirip.</p></div><div class="admin-field"><label>Cari pegawai tujuan</label><input type="search" id="adminLinkQuery" placeholder="Ketik nama atau unit kerja..."></div><div class="admin-field"><label>Pilih pegawai yang cocok</label><select id="adminLinkTarget" name="personId" required><option value="">Cari nama dulu...</option></select></div>${actions('Hubungkan peserta')}</form>`);
     const build=(q)=>{const candidates=people.filter(p=>norm([p.name,p.unit].join(' ')).includes(norm(q))).slice(0,80);$('#adminLinkTarget').innerHTML='<option value="">Pilih pegawai</option>'+candidates.map(p=>`<option value="${esc(p.id)}" ${p.id===sib.personId?'selected':''}>${esc(p.name)} · ${esc(p.unit)}</option>`).join('')};
     $('#adminLinkQuery').value=sib.name;build(sib.name);
-    if(!$('#adminLinkTarget').value)build('');
+    if(!$('#adminLinkTarget').value)build('');window.SearchableSelect?.syncAll();
   }
   async function submitForm(form){if(state.busy)return;
     const error=$('#adminFormError'),button=form.querySelector('button[type=submit]');state.busy=true;if(error)error.textContent='';if(button){button.disabled=true;button.textContent='Menyimpan...'}
@@ -111,12 +131,17 @@
         const prof=[...form.querySelectorAll('input[name="profession"]:checked')].map(n=>n.value);
         result=await API().call('savePerson',state.token,{id:form.dataset.id||'',name:data.get('name'),unit:data.get('unit'),status:data.get('status'),program:data.get('program'),nip:data.get('nip'),nik:data.get('nik'),professions:prof});
       }else if(form.id==='adminProfessionForm')result=await API().call('saveProfession',state.token,{name:data.get('name')});
-      else if(form.id==='adminTrainingForm')result=await API().call('saveTraining',state.token,{name:data.get('name'),type:data.get('type'),profession:data.get('profession'),jpl:Number(data.get('jpl')||0),link:data.get('link')||''});
+      else if(form.id==='adminTrainingForm'){
+        const name=String(data.get('name')||'').trim(),scope=data.get('scope'),professions=data.getAll('professions');
+        if(scope==='profesi'&&!professions.length)throw Error('Pilih minimal satu profesi.');
+        const duplicate=(state.raw.trainings||[]).some(t=>norm(t.name)===norm(name));
+        if(duplicate)throw Error('Judul pelatihan sudah ada. Pilih pelatihan yang tersedia agar tidak dobel.');
+        result=await API().call('saveTraining',state.token,{name,scope,professions,jpl:Number(data.get('jpl')||0),link:data.get('link')||''});
+      }
       else if(form.id==='adminAssignTrainingForm'){
-        const personId=form.dataset.id,trainingId=data.get('trainingId'),name=String(data.get('name')||'').trim(),status=data.get('status');
-        if(name)result=await API().call('savePersonTraining',state.token,{personId,name,status});
-        else if(trainingId)result=await API().call('setTrainingStatus',state.token,{personId,trainingId,status});
-        else throw Error('Pilih pelatihan dari katalog atau isi nama pelatihan baru.');
+        const personId=form.dataset.id,trainingId=data.get('trainingId'),status=data.get('status');
+        if(!trainingId)throw Error('Pilih pelatihan dari katalog terlebih dahulu.');
+        result=await API().call('setTrainingStatus',state.token,{personId,trainingId,status});
       }
       else if(form.id==='adminLinkForm')result=await API().call('linkSibangkom',state.token,{sibKey:form.dataset.key,personId:data.get('personId')});
       else if(form.id==='adminPasswordForm'){
@@ -162,9 +187,9 @@
     const toggleBtn=e.target.closest('[data-admin-toggle]');if(toggleBtn){await toggle(toggleBtn.dataset.adminPerson,toggleBtn.dataset.adminToggle,toggleBtn);return}
     const action=e.target.closest('[data-admin]');if(action){const a=action.dataset.admin;if(a==='close')closeModal();if(a==='add-person')personForm();if(a==='add-training')trainingForm();if(a==='add-profession')professionForm();if(a==='password')passwordForm();if(a==='logout')await logout();if(a==='more'){state.limit+=25;renderListing()}}
   });
-  document.addEventListener('input',e=>{if(e.target.id==='adminQuery'){state.search=e.target.value;state.limit=25;renderListing()}if(e.target.id==='adminLinkQuery'){const q=norm(e.target.value),people=(state.raw?.people||[]).filter(p=>(p.professions||[]).length&&norm([p.name,p.unit].join(' ')).includes(q)).slice(0,80);$('#adminLinkTarget').innerHTML='<option value="">Pilih pegawai</option>'+people.map(p=>`<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.unit)}</option>`).join('')}if(e.target.id==='adminStatusQuery'){const q=norm(e.target.value);document.querySelectorAll('[data-status-name]').forEach(row=>row.hidden=!norm(row.dataset.statusName).includes(q))}if(e.target.id==='adminAssignFilter'){const q=norm(e.target.value);document.querySelectorAll('#adminAssignId option[data-training-option-name]').forEach(option=>{option.hidden=!norm(option.dataset.trainingOptionName).includes(q)});const sel=$('#adminAssignId');if(sel&&sel.selectedOptions[0]?.hidden)sel.value='';}});
+  document.addEventListener('input',e=>{if(e.target.id==='adminQuery'){state.search=e.target.value;state.limit=25;renderListing()}if(e.target.id==='adminLinkQuery'){const q=norm(e.target.value),people=(state.raw?.people||[]).filter(p=>(p.professions||[]).length&&norm([p.name,p.unit].join(' ')).includes(q)).slice(0,80);$('#adminLinkTarget').innerHTML='<option value="">Pilih pegawai</option>'+people.map(p=>`<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.unit)}</option>`).join('');window.SearchableSelect?.syncAll()}if(e.target.id==='adminStatusQuery'){const q=norm(e.target.value);document.querySelectorAll('[data-status-name]').forEach(row=>row.hidden=!norm(row.dataset.statusName).includes(q))}if(e.target.id==='adminProfessionSearch'){const q=norm(e.target.value);document.querySelectorAll('.admin-prof-item').forEach(el=>el.hidden=!norm(el.dataset.profName).includes(q));}});
   document.addEventListener('change',e=>{
-    if(e.target.id==='adminTrainingType')$('#adminTrainingProfession').disabled=e.target.value!=='profesi';
+    if(e.target.id==='adminTrainingScope')$('#adminScopeRoles').hidden=e.target.value!=='profesi';
     if(e.target.matches('[data-admin-status-change]'))updateTrainingStatus(e.target.dataset.adminPerson,e.target.dataset.adminStatusChange,e.target.value,e.target);
   });
   document.addEventListener('submit',e=>{if(!e.target.id.startsWith('admin'))return;e.preventDefault();if(e.target.id==='adminLogin')login(e.target);else submitForm(e.target)});
