@@ -4,9 +4,9 @@
 (() => {'use strict';
   const BACKEND_URL=String(window.DINKES_CONFIG?.APPS_SCRIPT_URL||'').trim();
   const GAS=/^https:\/\/script\.google\.com\/macros\/s\/[-\w]+\/exec$/.test(BACKEND_URL);
-  const CACHE_KEY='dinkes_sdm_live_github_2026_v10';
+  const CACHE_KEY='dinkes_sdm_live_github_2026_v11';
   const TTL=Number(window.DINKES_CONFIG?.PUBLIC_CACHE_MS)||180000;
-  const allowed=new Set(['getPublicData','getAdminData','loginAdmin','logoutAdmin','changeAdminPassword','savePerson','saveProfession','saveTraining','saveCompletion','linkSibangkom','deleteRecord','getDeletedRecords','restoreRecord']);
+  const allowed=new Set(['getPublicData','getAdminData','loginAdmin','logoutAdmin','changeAdminPassword','savePerson','saveProfession','saveTraining','saveCompletion','saveCompletionsBatch','linkSibangkom','deleteRecord','getDeletedRecords','restoreRecord']);
   // Read-only public endpoint via ContentService JSONP (tanpa iframe / CORS).
   // Permintaan admin tetap memakai google.script.run dalam iframe terproteksi.
   let callbackSerial=0;
@@ -168,7 +168,7 @@
     try{const data=await publicFetch(30000,true);writeCache(data);window.location.reload()}
     catch(e){status('Sinkronisasi gagal');window.PelatihanView?.toast(e.message);btn.disabled=false;btn.classList.remove('sync-busy')}
   }
-  window.PelatihanBridge={GAS,call,project,getRaw:()=>raw,clearCache,refresh,writeCache,commitLocal,warmAdmin:()=>connect().catch(e=>console.warn('Penghubung admin:',e.message))};
+  window.PelatihanBridge={GAS,call,project,getRaw:()=>raw,clearCache,refresh,writeCache,commitLocal,markLocalEdit:()=>{localRevision++},warmAdmin:()=>connect().catch(e=>console.warn('Penghubung admin:',e.message))};
   document.getElementById('refreshSheet')?.addEventListener('click',refresh);
   const cached=readCache();
   if(!GAS){showError('Alamat Apps Script belum diisi. Isi assets/config.js dengan URL deployment /exec.');return}

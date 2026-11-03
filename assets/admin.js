@@ -308,11 +308,83 @@
       localSaved(form,payload,result);closeModal();render();toast('Tersimpan di Google Sheets.');
     }catch(e){if(error)error.textContent=e.message;else toast(e.message);if(button){button.disabled=false;button.textContent='Coba simpan lagi'}}finally{state.busy=false}
   }
-  async function toggle(personId,trainingId,button){if(state.busy)return;const p=(state.raw.people||[]).find(x=>x.id===personId),done=!!p?.completed?.includes(trainingId);state.busy=true;button.disabled=true;
-    try{await API().call('saveCompletion',state.token,{personId,trainingId,done:!done});button.className='admin-btn '+(!done?'done':'todo');button.textContent=!done?'Sudah':'Belum';
-      if(!done){p.completed.push(trainingId);p.notCompleted=p.notCompleted.filter(id=>id!==trainingId)}else{p.completed=p.completed.filter(id=>id!==trainingId);if(!p.notCompleted.includes(trainingId))p.notCompleted.push(trainingId)}
-      API().commitLocal?.(state.raw);window.PelatihanView?.syncFromRaw?.(state.raw);toast('Status tersimpan di Sheet.');
-    }catch(e){toast(e.message)}finally{state.busy=false;button.disabled=false}
+  // Status dikirim dalam kelompok kecil. Klik langsung mengubah tampilan,
+  // lalu disimpan di latar belakang (tanpa menutup modal atau reload).
+  const pendingStatuses=new Map();
+  let statusTimer=null,statusSaving=false,statusDirty=false;
+  function assignStatus(personId,trainingId,yes){
+    const p=(state.raw?.people||[]).find(x=>x.id===personId);if(!p)return;
+    p.completed=(p.completed||[]).filter(x=>x!==trainingId);
+    p.notCompleted=(p.notCompleted||[]).filter(x=>x!==trainingId);
+    if(yes!==null)(yes?p.completed:p.notCompleted).push(trainingId);
+    if(trainingId.startsWith('S:')){
+      const sib=(state.raw.sibEntries||[]).find(x=>x.personId===personId);
+      if(sib){sib.done=(sib.done||[]).filter(x=>x!==trainingId);sib.no=(sib.no||[]).filter(x=>x!==trainingId);sib.unknown=(sib.unknown||[]).filter(x=>x!==trainingId);if(yes!==null)(yes?sib.done:sib.no).push(trainingId)}
+    }
+    window.PelatihanView?.patchCompletion?.(personId,trainingId,yes);
+  }
+  function paintStatus(button,yes,waiting=false){
+    if(!button?.isConnected)return;
+    button.className='admin-btn '+(yes?'done':'todo');
+    button.textContent=waiting?(yes?'Sudah · menyimpan':'Belum · menyimpan'):(yes?'Sudah':'Belum');
+    button.setAttribute('aria-busy',waiting?'true':'false');
+    button.title=waiting?'Menyimpan ke Google Sheets...':'Tersimpan';
+  }
+  function scheduleStatusFlush(){
+    if(statusTimer)clearTimeout(statusTimer);
+    statusTimer=setTimeout(flushStatuses,260);
+  }
+  async function flushStatuses(){
+    if(statusSaving||!pendingStatuses.size)return;
+    const entries=[...pendingStatuses.values()].slice(0,25);
+    entries.forEach(x=>pendingStatuses.delete(x.personId+'|||'+x.trainingId));
+    statusSaving=true;
+    try{
+      const result=await API().call('saveCompletionsBatch',state.token,entries.map(x=>({personId:x.personId,trainingId:x.trainingId,done:x.done})));
+      if(!result?.ok)throw Error('Gagal menyimpan status.');
+      for(const x of entries){
+        const key=x.personId+'|||'+x.trainingId;
+        const newer=pendingStatuses.get(key);
+        if(!newer){document.querySelectorAll('[data-admin-toggle]').forEach(b=>{
+          if(b.dataset.adminPerson===x.personId&&b.dataset.adminToggle===x.trainingId)paintStatus(b,x.done,false);
+        })}
+      }
+      statusDirty=true;
+    }catch(e){
+      // Jika permintaan gagal, jangan berpura-pura sudah tersimpan.
+      // Klik berikutnya tetap bisa dilakukan; status dikembalikan ke nilai terakhir yang sudah aman.
+      for(const x of entries){
+        const key=x.personId+'|||'+x.trainingId;
+        if(pendingStatuses.has(key))continue;
+        assignStatus(x.personId,x.trainingId,x.before==='unknown'?null:x.before==='yes');
+        document.querySelectorAll('[data-admin-toggle]').forEach(b=>{
+          if(b.dataset.adminPerson===x.personId&&b.dataset.adminToggle===x.trainingId){
+            if(x.before==='unknown'){b.className='admin-btn unknown';b.textContent='Belum diisi'}
+            else paintStatus(b,x.before==='yes',false);
+            b.setAttribute('aria-busy','false');
+          }
+        });
+      }
+      toast('Status belum tersimpan: '+(e.message||e));
+    }finally{
+      statusSaving=false;
+      if(pendingStatuses.size)scheduleStatusFlush();
+      else if(statusDirty){
+        statusDirty=false;
+        API().commitLocal?.(state.raw); // Tulis cache browser sekali untuk satu rangkaian klik.
+        toast('Status tersimpan.');
+      }
+    }
+  }
+  function toggle(personId,trainingId,button){
+    if(!state.auth)return;
+    const p=(state.raw?.people||[]).find(x=>x.id===personId);if(!p)return;
+    const done=(p.completed||[]).includes(trainingId),before=done?'yes':(p.notCompleted||[]).includes(trainingId)?'no':'unknown';
+    const key=personId+'|||'+trainingId,existing=pendingStatuses.get(key);
+    API()?.markLocalEdit?.(); // mencegah refresh background menimpa perubahan yang belum selesai
+    assignStatus(personId,trainingId,!done);
+    pendingStatuses.set(key,{personId,trainingId,done:!done,before:existing?.before||before});
+    paintStatus(button,!done,true);scheduleStatusFlush();
   }
   document.addEventListener('click',async e=>{
     const eye=e.target.closest('[data-admin-eye]');
@@ -323,7 +395,7 @@
     const edit=e.target.closest('[data-admin-edit]');if(edit){personForm(edit.dataset.adminEdit);return}
     const mark=e.target.closest('[data-admin-status]');if(mark){statusForm(mark.dataset.adminStatus);return}
     const link=e.target.closest('[data-admin-link]');if(link){linkForm(link.dataset.adminLink);return}
-    const toggleBtn=e.target.closest('[data-admin-toggle]');if(toggleBtn){await toggle(toggleBtn.dataset.adminPerson,toggleBtn.dataset.adminToggle,toggleBtn);return}
+    const toggleBtn=e.target.closest('[data-admin-toggle]');if(toggleBtn){toggle(toggleBtn.dataset.adminPerson,toggleBtn.dataset.adminToggle,toggleBtn);return}
     const action=e.target.closest('[data-admin]');if(action){const a=action.dataset.admin;if(a==='close')closeModal();if(a==='add-person')personForm();if(a==='add-training')trainingForm();if(a==='add-profession')professionForm();if(a==='password')passwordForm();if(a==='logout')await logout();if(a==='more'){state.limit+=25;renderListing()}if(a==='refresh-link')refreshLinkCandidates()}
   });
   document.addEventListener('input',e=>{if(e.target.id==='adminQuery'){state.search=e.target.value;state.limit=25;renderListing()}if(e.target.id==='adminLinkQuery')renderLinkCandidates();if(e.target.id==='adminRestoreConfirm'){const btn=$('#adminRestoreSubmit');if(btn)btn.disabled=e.target.value!=='PULIHKAN'||state.busy;}if(e.target.id==='adminDeleteConfirm'){const btn=$('#adminDeleteSubmit');if(btn)btn.disabled=e.target.value!=='HAPUS'||state.busy;}if(e.target.id==='adminStatusQuery'){const q=norm(e.target.value);document.querySelectorAll('[data-status-name]').forEach(row=>row.hidden=!norm(row.dataset.statusName).includes(q))}});

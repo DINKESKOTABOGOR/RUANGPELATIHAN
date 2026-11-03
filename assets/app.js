@@ -4,6 +4,7 @@ const safe=s=>String(s??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'
 const norm=s=>String(s||'').toLocaleLowerCase('id').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 const TRAIN=DATA.trainings, PEOPLE=DATA.people, ROLE=DATA.roleTraining;
 const trainById=Object.fromEntries(TRAIN.map(x=>[x.id,x]));
+let dashboardStatsDirty=false,trainingStatsDirty=false;
 const state={view:'dashboard',name:'',train:null,role:'',unit:'',status:'',page:1,mode:'table',sort:1,trainQuery:'',trainRole:'',trainPage:1,selectedTraining:null,person:null,detailStatus:'all',detailQuery:'',ref:'wajib',refRole:'',sibQuery:''};
 const sizes={people:12,training:10};
 const iconPaths={
@@ -45,7 +46,7 @@ const trainingStats=TRAIN.map(t=>{const a=PEOPLE.filter(p=>applicable(p,t.id));r
 const trainStatById=Object.fromEntries(trainingStats.map(t=>[t.id,t]));
 function animateCounts(){if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){document.querySelectorAll('[data-count]').forEach(n=>n.textContent=number(Number(n.dataset.count)));return}const nodes=$$('[data-count]');nodes.forEach(node=>{const value=Number(node.dataset.count),start=performance.now(),duration=720;function tick(now){let v=Math.min(1,(now-start)/duration);v=1-Math.pow(1-v,3);node.textContent=number(Math.round(v*value));if(v<1)requestAnimationFrame(tick)}requestAnimationFrame(tick)})}
 function fillBars(root){(root||document).querySelectorAll('[data-bar]').forEach(el=>{requestAnimationFrame(()=>{el.style.width=(Number(el.dataset.bar)||0).toFixed(1)+'%'})})}
-function switchView(view,options={}){if(!['dashboard','pegawai','pelatihan','sibangkom','referensi','admin'].includes(view))return;state.view=view;$$('.section-view').forEach(el=>el.classList.toggle('active',el.id==='view-'+view));$$('.nav-item').forEach(btn=>{const active=btn.dataset.view===view;btn.classList.toggle('active',active);active?btn.setAttribute('aria-current','page'):btn.removeAttribute('aria-current')});const names={dashboard:'Ringkasan Data',pegawai:'Data Pegawai',pelatihan:'Peta Pelatihan',sibangkom:'SIBANGKOM',referensi:'Pembelajaran & JPL',admin:'Panel Admin'};$('#topPage').textContent=names[view];$('#sidebar').classList.remove('open');$('#mobileDim').classList.remove('open');window.scrollTo({top:0,behavior:'instant'});if(view==='dashboard'){fillBars($('#view-dashboard'));animateCounts()}if(view==='pegawai')renderPeople();if(view==='pelatihan')renderTrainingPage();if(view==='sibangkom')renderSibPage();if(view==='referensi')renderReference();if(view==='admin'){window.PelatihanAdmin?.render();window.PelatihanBridge?.warmAdmin?.();}if(!options.noHash)history.replaceState(null,'','#'+view)}
+function switchView(view,options={}){if(!['dashboard','pegawai','pelatihan','sibangkom','referensi','admin'].includes(view))return;state.view=view;$$('.section-view').forEach(el=>el.classList.toggle('active',el.id==='view-'+view));$$('.nav-item').forEach(btn=>{const active=btn.dataset.view===view;btn.classList.toggle('active',active);active?btn.setAttribute('aria-current','page'):btn.removeAttribute('aria-current')});const names={dashboard:'Ringkasan Data',pegawai:'Data Pegawai',pelatihan:'Peta Pelatihan',sibangkom:'SIBANGKOM',referensi:'Pembelajaran & JPL',admin:'Panel Admin'};$('#topPage').textContent=names[view];$('#sidebar').classList.remove('open');$('#mobileDim').classList.remove('open');window.scrollTo({top:0,behavior:'instant'});if(view==='dashboard'){if(dashboardStatsDirty){renderDashboard();dashboardStatsDirty=false}fillBars($('#view-dashboard'));animateCounts()}if(view==='pegawai')renderPeople();if(view==='pelatihan'){if(trainingStatsDirty){rebuildTrainingStatusStats();trainingStatsDirty=false}renderTrainingPage();}if(view==='sibangkom')renderSibPage();if(view==='referensi')renderReference();if(view==='admin'){window.PelatihanAdmin?.render();window.PelatihanBridge?.warmAdmin?.();}if(!options.noHash)history.replaceState(null,'','#'+view)}
 function rankMarkup(items,counts,max,kind){return items.map(([label,count,id],i)=>`<div class="rank-item" data-rank-type="${kind}" data-rank-key="${safe(String(id??label))}" title="Klik untuk melihat data"><div class="rank-number">${String(i+1).padStart(2,'0')}</div><div><div class="rank-name" title="${safe(label)}">${safe(label)}</div><div class="track"><div class="fill ${kind==='training'?'amber':''}" data-bar="${max?count/max*100:0}"></div></div></div><div class="rank-count">${number(count)}</div></div>`).join('')}
 function renderDashboard(){const prof=DATA.professions.map(n=>[n,PEOPLE.filter(p=>p.role===n).length]).sort((a,b)=>b[1]-a[1]);const need=[...trainingStats].filter(t=>t.no>0).sort((a,b)=>b.no-a.no).slice(0,7);const cards=[['Entri pegawai',PEOPLE.length,`${DATA.professions.filter(r=>PEOPLE.some(p=>p.role===r)).length} profesi tercatat`,'users','teal'],['Jenis pelatihan',TRAIN.length,'dari seluruh profesi','book-open','blue'],['Status sudah',ALL_COUNTS.yes,'entri pelatihan tercatat','check-circle','purple'],['Status belum',ALL_COUNTS.no,'entri berstatus “Belum”','sliders-horizontal','amber']];$('#kpis').innerHTML=cards.map(([label,n,foot,icon,color])=>`<div class="kpi"><div class="kpi-head"><span>${safe(label)}</span><span class="kpi-icon ${color}">${ico(icon)}</span></div><div class="kpi-value" data-count="${n}">0</div><div class="kpi-foot">${safe(foot)}</div></div>`).join('');$('#profTotal').textContent=number(PEOPLE.length)+' ENTRI';$('#profRank').innerHTML=rankMarkup(prof,PEOPLE.length,Math.max(...prof.map(x=>x[1])),'role');$('#needsRank').innerHTML=rankMarkup(need.map(t=>[t.name,t.no,t.id]),null,Math.max(...need.map(x=>x.no)),'training');$('#sidePeople').textContent=number(PEOPLE.length);fillBars($('#view-dashboard'));animateCounts()}
 function filteredPeople(){const q=norm(state.name).trim();return PEOPLE.filter(p=>{if(q&&!norm(p.name).includes(q))return false;if(state.role&&p.role!==state.role)return false;if(state.unit&&p.unit!==state.unit)return false;if(state.train!==null&&!applicable(p,state.train))return false;if(state.status){if(state.train!==null)return personStatus(p,state.train)===state.status;if(getCounts(p)[state.status]<=0)return false}return true}).sort((a,b)=>state.sort*a.name.localeCompare(b.name,'id'))}
@@ -124,7 +125,51 @@ function bind(){document.addEventListener('click',e=>{const quick=e.target.close
  }
 function init(){DATA.professions.forEach(role=>{['roleFilter','trainingRole'].forEach(id=>{$('#'+id).insertAdjacentHTML('beforeend',`<option value="${safe(role)}">${safe(role)}</option>`)})});unitNames.forEach(unit=>$('#unitFilter').insertAdjacentHTML('beforeend',`<option value="${safe(unit)}">${safe(unit)}</option>`));decorate();renderDashboard();renderComboOptions();renderReference();bind();const hash=location.hash.replace('#','');switchView(['dashboard','pegawai','pelatihan','sibangkom','referensi','admin'].includes(hash)?hash:'dashboard',{noHash:true})}
 init();
- window.PelatihanView={show:switchView,reset:resetFilters,decorate,toast:showToast,syncFromRaw,
+ function rebuildTrainingStatusStats(){
+   trainingStats.splice(0,trainingStats.length,...TRAIN.map(t=>{
+     const members=PEOPLE.filter(p=>applicable(p,t.id));
+     return {...t,all:members.length,yes:members.filter(p=>p.yes.includes(t.id)).length,
+       no:members.filter(p=>p.no.includes(t.id)).length,
+       unknown:members.filter(p=>personStatus(p,t.id)==='unknown').length};
+   }));
+   Object.keys(trainStatById).forEach(k=>delete trainStatById[k]);
+   trainingStats.forEach(t=>trainStatById[t.id]=t);
+ }
+ function patchCompletion(personId,trainingId,yes){
+   const source=window.PelatihanBridge?.getRaw?.();
+   const srcTraining=(source?.trainings||[]).find(t=>t.id===trainingId);
+   let diffYes=0,diffNo=0;
+   for(const p of PEOPLE){
+     if(p.sourceId!==personId)continue;
+     const before=getCounts(p);
+     if(trainingId.startsWith('S:')){
+       const m=(p.mandatory||[]).find(x=>x.id===trainingId);
+       if(m)m.status=yes===null?'unknown':yes?'yes':'no';
+     }else{
+       const numeric=srcTraining&&TRAIN.find(t=>t.name===srcTraining.name&&t.roles.includes(p.role))?.id;
+       if(numeric!==undefined&&numeric!==null){
+         p.yes=p.yes.filter(x=>x!==numeric);p.no=p.no.filter(x=>x!==numeric);
+         if(yes!==null){(yes?p.yes:p.no).push(numeric);if(!p.recorded.includes(numeric))p.recorded.push(numeric)}
+         else p.recorded=p.recorded.filter(x=>x!==numeric);
+       }
+     }
+     const after=getCounts(p);
+     ALL_COUNTS.yes+=after.yes-before.yes;ALL_COUNTS.no+=after.no-before.no;ALL_COUNTS.unknown+=after.unknown-before.unknown;
+   }
+   if(trainingId.startsWith('S:')){
+     const row=(DATA.sibangkom||[]).find(x=>x.sourceId===personId);
+     const label=srcTraining?.name;
+     if(row&&label){row.done=row.done.filter(x=>x!==label);row.no=row.no.filter(x=>x!==label);row.unknown=row.unknown.filter(x=>x!==label);if(yes!==null)(yes?row.done:row.no).push(label);else row.unknown.push(label)}
+   }
+   // Jangan hitung ulang semua pegawai tiap klik; tunggu sampai halaman statistik dibuka.
+   dashboardStatsDirty=true;trainingStatsDirty=true;
+   if(state.view==='dashboard'){renderDashboard();dashboardStatsDirty=false}
+   if(state.view==='pelatihan'){rebuildTrainingStatusStats();renderTrainingPage();trainingStatsDirty=false}
+   // Render halaman aktif saja, tanpa reset filter, modal, atau posisi scroll.
+   if(state.view==='pegawai')renderPeople();
+   else if(state.view==='sibangkom')renderSibPage();
+ }
+ window.PelatihanView={show:switchView,reset:resetFilters,decorate,toast:showToast,syncFromRaw,patchCompletion,
    patchSibangkom:(sibKey,personId)=>{
      const row=(DATA.sibangkom||[]).find(x=>x.id===sibKey);
      if(row){row.sourceId=personId;if(state.view==='sibangkom')renderSibPage()}
