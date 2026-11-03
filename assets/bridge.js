@@ -4,9 +4,9 @@
 (() => {'use strict';
   const BACKEND_URL=String(window.DINKES_CONFIG?.APPS_SCRIPT_URL||'').trim();
   const GAS=/^https:\/\/script\.google\.com\/macros\/s\/[-\w]+\/exec$/.test(BACKEND_URL);
-  const CACHE_KEY='dinkes_sdm_live_github_2026_v7';
+  const CACHE_KEY='dinkes_sdm_live_github_2026_v8';
   const TTL=Number(window.DINKES_CONFIG?.PUBLIC_CACHE_MS)||180000;
-  const allowed=new Set(['getPublicData','getAdminData','loginAdmin','logoutAdmin','changeAdminPassword','savePerson','saveProfession','saveTraining','saveCompletion','linkSibangkom']);
+  const allowed=new Set(['getPublicData','getAdminData','loginAdmin','logoutAdmin','changeAdminPassword','savePerson','saveProfession','saveTraining','saveCompletion','linkSibangkom','deleteRecord']);
   // Read-only public endpoint via ContentService JSONP (tanpa iframe / CORS).
   // Permintaan admin tetap memakai google.script.run dalam iframe terproteksi.
   let callbackSerial=0;
@@ -94,6 +94,14 @@
       if(!roleTraining[t.profession].includes(entry.id))roleTraining[t.profession].push(entry.id);
       toNum.set(t.id,entry.id);
     }
+    // SIBANGKOM adalah satu-satunya kelompok pelatihan wajib untuk SEMUA pegawai.
+    // Status sumber profesi tidak otomatis mewajibkan pegawai mengikuti semua katalog.
+    const sibTrainings=(data.trainings||[]).filter(t=>t.type==='sibangkom'&&t.name);
+    const sibNames=Object.fromEntries(sibTrainings.map(t=>[t.id,t.name]));
+    const sibByPerson=new Map();
+    for(const row of (data.sibEntries||[])){
+      if(row.personId&&!sibByPerson.has(row.personId))sibByPerson.set(row.personId,row);
+    }
     const people=[];
     for(const p of (data.people||[])){
       for(const role of (p.professions||[])){
@@ -101,7 +109,15 @@
         const valid=new Set(roleTraining[role]);
         const yes=[...new Set((p.completed||[]).map(id=>toNum.get(id)).filter(id=>valid.has(id)))];
         const no=[...new Set((p.notCompleted||[]).map(id=>toNum.get(id)).filter(id=>valid.has(id)&&!yes.includes(id)))];
-        people.push({id:p.id+'|'+role,sourceId:p.id,name:p.name||'Nama belum diisi',role,unit:p.unit||'Unit belum diisi',employment:p.status||'',program:p.program||'',nip:'',yes,no});
+        const linked=sibByPerson.get(p.id);
+        // Gunakan status pada pegawai (sudah digabung dan ditimpa koreksi admin di backend).
+        // Jika belum dicocokkan, SIBANGKOM tetap tampil dengan status Belum diisi.
+        const mandatory=sibTrainings.map(t=>({
+          id:t.id,name:t.name,
+          status:(p.completed||[]).includes(t.id)?'yes':(p.notCompleted||[]).includes(t.id)?'no':'unknown'
+        }));
+        const recorded=roleTraining[role].filter(id=>yes.includes(id)||no.includes(id));
+        people.push({id:p.id+'|'+role,sourceId:p.id,name:p.name||'Nama belum diisi',role,unit:p.unit||'Unit belum diisi',employment:p.status||'',program:p.program||'',nip:'',yes,no,mandatory,recorded,sibLinked:!!linked});
       }
     }
     const names=Object.fromEntries((data.trainings||[]).map(t=>[t.id,t.name]));
