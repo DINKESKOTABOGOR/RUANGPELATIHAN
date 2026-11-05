@@ -249,7 +249,7 @@
     statusSession={personId:id,original,changes:new Map(),saving:false};
     const profCount=applicable.filter(t=>t.type==='profesi').length,sibCount=applicable.filter(t=>t.type==='sibangkom').length;
     const professionText=(p.professions||[]).join(' / ')||'profesi pegawai';
-    modal('Status pelatihan · '+p.name,`<div class="admin-tip">${profCount} pelatihan ${esc(professionText)} · ${sibCount} SIBANGKOM. Pilih status yang ingin diubah, lalu klik <b>Simpan</b>. Pelatihan profesi yang belum dicatat bukan kewajiban.</div><input id="adminStatusQuery" type="search" class="admin-filter" placeholder="Cari pelatihan..." autocomplete="off" aria-label="Cari pelatihan pegawai"><div class="admin-training-list" id="adminStatusRows">${applicable.map(t=>`<div class="admin-status-row" data-status-name="${esc(norm(t.name+' '+(t.profession||t.type)))}"><div>${esc(t.name)} <small style="color:#9aa9b7">· ${esc(t.profession||t.type)}</small></div><button type="button" class="admin-btn ${original.get(t.id)==='yes'?'done':original.get(t.id)==='no'?'todo':'unknown'}" data-admin-toggle="${esc(t.id)}" data-admin-person="${esc(p.id)}" aria-label="Ubah status ${esc(t.name)}">${original.get(t.id)==='yes'?'Sudah':original.get(t.id)==='no'?'Belum':'Belum diisi'}</button></div>`).join('')||'<div class="admin-tip">Belum ada pelatihan untuk profesi ini.</div>'}</div><div id="adminStatusNoResult" class="admin-tip" hidden>Pelatihan tidak ditemukan.</div><div class="admin-actions admin-status-actions"><button type="button" class="admin-btn outline" data-admin="close">Tutup</button><button type="button" class="admin-btn admin-status-save" id="adminStatusSave" data-admin="save-status" hidden>Simpan</button></div><p class="error-live" id="adminStatusError" role="alert"></p>`);
+    modal('Status pelatihan · '+p.name,`<div class="admin-tip">${profCount} pelatihan ${esc(professionText)} · ${sibCount} SIBANGKOM. Pilih status yang ingin diubah, lalu klik <b>Simpan</b>. Kolom kosong dihitung Belum. Pelatihan profesi tetap bukan pelatihan wajib.</div><input id="adminStatusQuery" type="search" class="admin-filter" placeholder="Cari pelatihan..." autocomplete="off" aria-label="Cari pelatihan pegawai"><div class="admin-training-list" id="adminStatusRows">${applicable.map(t=>`<div class="admin-status-row" data-status-name="${esc(norm(t.name+' '+(t.profession||t.type)))}"><div>${esc(t.name)} <small style="color:#9aa9b7">· ${esc(t.profession||t.type)}</small></div><button type="button" class="admin-btn ${original.get(t.id)==='yes'?'done':'todo'}" data-admin-toggle="${esc(t.id)}" data-admin-person="${esc(p.id)}" aria-label="Ubah status ${esc(t.name)}">${original.get(t.id)==='yes'?'Sudah':'Belum'}</button></div>`).join('')||'<div class="admin-tip">Belum ada pelatihan untuk profesi ini.</div>'}</div><div id="adminStatusNoResult" class="admin-tip" hidden>Pelatihan tidak ditemukan.</div><div class="admin-actions admin-status-actions"><button type="button" class="admin-btn outline" data-admin="close">Tutup</button><button type="button" class="admin-btn admin-status-save" id="adminStatusSave" data-admin="save-status" hidden>Simpan</button></div><p class="error-live" id="adminStatusError" role="alert"></p>`);
   }
   function filterStatusRows(query){
     const q=norm(query),rows=document.querySelectorAll('#adminStatusRows [data-status-name]');
@@ -259,8 +259,8 @@
   }
   function statusPaint(button,status,dirty=false){
     if(!button)return;
-    button.className='admin-btn '+(status==='yes'?'done':status==='no'?'todo':'unknown');
-    button.textContent=status==='yes'?'Sudah':status==='no'?'Belum':'Belum diisi';
+    button.className='admin-btn '+(status==='yes'?'done':'todo');
+    button.textContent=status==='yes'?'Sudah':'Belum';
     button.dataset.dirty=String(dirty);
     button.title=dirty?'Belum disimpan':'Klik untuk mengubah';
   }
