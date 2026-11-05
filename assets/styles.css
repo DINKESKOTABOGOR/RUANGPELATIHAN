@@ -222,3 +222,23 @@ button,input,select{font:inherit}
 
 /* Katalog profesi berbeda dengan status pelatihan wajib. */
 .catalog-note{margin:4px 0 11px;padding:10px 12px;border-radius:9px;background:#f1f7fd;color:#456d8c;font-size:11px;line-height:1.5}.admin-form-note{grid-column:1/-1;margin:8px 0 3px}
+
+/* Status admin: pencarian benar-benar menyembunyikan baris; Simpan hanya saat ada perubahan. */
+.admin-status-row[hidden],#adminStatusSave[hidden],#adminStatusNoResult[hidden]{display:none!important}
+.admin-status-row .admin-btn[data-dirty="true"]{outline:2px solid #77c9c0;outline-offset:1px}
+.admin-status-save{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-width:112px}
+.admin-status-save.status-saving{cursor:wait;opacity:.82}
+.admin-status-save.status-saving:before{content:"";width:13px;height:13px;border-radius:50%;border:2px solid #ffffff80;border-top-color:#fff;animation:statusRotate .7s linear infinite}
+@keyframes statusRotate{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.admin-status-save.status-saving:before{animation:none}}
+
+/* Identitas profesi di profil: dibedakan dari pelatihan wajib. */
+.profession-tag{display:inline-flex;vertical-align:middle;margin-left:7px;padding:2px 6px;border-radius:5px;background:#edf2f8;color:#60758d;font-size:9px;line-height:1.3;font-weight:700;white-space:nowrap}
+
+/* Rekap status: tidak menyamakan 'Belum' dengan sel profesi yang belum dicatat. */
+.mini-stat{flex-wrap:wrap;white-space:normal;row-gap:5px;min-width:190px}
+.mini-stat .unknown-badge{background:#eef4f9;color:#54728d}
+.drawer-summary{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.drawer-summary div{padding:10px 7px;min-width:0}
+.drawer-summary small{font-size:9px;line-height:1.35;display:block;margin-top:5px}
+@media(max-width:460px){.drawer-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.drawer-head{padding-bottom:18px}}

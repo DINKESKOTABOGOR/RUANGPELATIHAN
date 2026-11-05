@@ -8,7 +8,7 @@
 <title>Ruang Pelatihan | Dinas Kesehatan Kota Bogor</title>
 <link rel="icon" type="image/webp" href="assets/logo-dinkes.webp">
 <link rel="preconnect" href="https://script.google.com" crossorigin>
-<link rel="stylesheet" href="assets/styles.css?v=mandatory1103">
+<link rel="stylesheet" href="assets/styles.css?v=rekap-belum-tercatat-1105">
 
 <meta name="theme-color" content="#f4f8fc"><meta name="description" content="Portal pelatihan pegawai Dinas Kesehatan Kota Bogor. Cari pegawai, lihat kebutuhan pelatihan, dan temukan pembelajaran per profesi.">
 </head>
@@ -41,7 +41,7 @@
 <div class="kpi-grid" id="kpis"></div>
     <div class="section-heading"><div><h3>Rincian Pelatihan</h3></div><button class="link-btn" data-go="pegawai">Buka daftar pegawai <span data-icon="arrow-up-right"></span></button></div>
     <div class="split-grid"><div class="panel"><div class="panel-title">Pegawai per profesi <small id="profTotal"></small></div><div id="profRank" class="rank-list"></div></div><div class="panel"><div class="panel-title">Pelatihan dengan status Belum terbanyak <small>DATA PEGAWAI</small></div><div id="needsRank" class="rank-list"></div></div></div>
-    <div class="source-note"><span data-icon="info"></span><div><b>Cara membaca status pelatihan</b><p><strong>Sudah</strong> = angka 1 pada Google Sheets. <strong>Belum</strong> = tertulis “Belum”. <strong>Belum diisi</strong> = sel kosong. Sel kosong tidak otomatis dihitung sebagai belum mengikuti. Pegawai dengan NIP yang sama digabung, tetapi bisa muncul di lebih dari satu profesi.</p></div></div>
+    <div class="source-note"><span data-icon="info"></span><div><b>Cara membaca status pelatihan</b><p><strong>Sudah</strong> = angka 1 pada Google Sheets. <strong>Belum</strong> = tertulis “Belum”. <strong>Belum diisi</strong> = sel kosong. Sel kosong tidak otomatis dihitung sebagai belum mengikuti. Pelatihan profesi yang belum dicatat dan SIBANGKOM yang belum diisi ditampilkan sebagai dua angka terpisah. Pegawai dengan NIP yang sama digabung, tetapi bisa muncul di lebih dari satu profesi.</p></div></div>
   </section>
   <section id="view-pegawai" class="section-view">
     <div class="view-intro"><div><h2>Data Pegawai</h2><p>Ketik nama atau pakai filter profesi, pelatihan, dan unit kerja.</p></div><div class="pill-label" id="peoplePill"></div></div>
@@ -50,7 +50,7 @@
       <div class="filter-field" id="trainingCombo"><span class="field-label">Jenis pelatihan</span><button class="combo-button" id="trainingButton" aria-haspopup="listbox" aria-expanded="false"><span data-icon="book-open"></span><span id="trainingLabel">Semua pelatihan</span><span data-icon="chevron-down"></span></button><div class="combo-pop" id="trainingPopup"><input id="trainingSearch" aria-label="Cari jenis pelatihan" placeholder="Cari nama pelatihan..."><div id="trainingOptions" class="combo-options" role="listbox"></div></div></div>
       <div class="filter-field"><label class="field-label" for="roleFilter">Profesi</label><div class="field-box"><span data-icon="briefcase-medical"></span><select id="roleFilter"><option value="">Semua profesi</option></select><span class="select-arrow" data-icon="chevron-down"></span></div></div>
       <div class="filter-field"><label class="field-label" for="unitFilter">Unit kerja</label><div class="field-box"><span data-icon="building-2"></span><select id="unitFilter"><option value="">Semua unit kerja</option></select><span class="select-arrow" data-icon="chevron-down"></span></div></div>
-      <div class="filter-field"><label class="field-label" for="statusFilter">Status pelatihan</label><div class="field-box"><span data-icon="sliders-horizontal"></span><select id="statusFilter"><option value="">Semua status</option><option value="yes">Sudah</option><option value="no">Belum</option><option value="unknown">Belum diisi</option></select><span class="select-arrow" data-icon="chevron-down"></span></div></div>
+      <div class="filter-field"><label class="field-label" for="statusFilter">Status pelatihan</label><div class="field-box"><span data-icon="sliders-horizontal"></span><select id="statusFilter"><option value="">Semua status</option><option value="yes">Sudah</option><option value="no">Belum</option><option value="unknown">SIBANGKOM belum diisi</option><option value="unrecorded">Profesi belum dicatat</option></select><span class="select-arrow" data-icon="chevron-down"></span></div></div>
     </div><div class="filter-footer"><div id="filterChips" class="chips"></div><button class="clear-btn" id="resetFilters">Bersihkan filter ↗</button></div></div>
     <div class="toolbar"><div id="resultCount" class="result-count"></div><div class="toolbar-right"><button class="small-btn active" id="tableToggle" title="Tampilan tabel"><span data-icon="list"></span> Tabel</button><button class="small-btn" id="cardToggle" title="Tampilan kartu"><span data-icon="layout-grid"></span> Kartu</button><button class="small-btn" id="sortBtn" title="Urutan nama"><span data-icon="arrow-down-a-z"></span> A–Z</button></div></div>
     <div id="peopleResults"></div><div class="page-controls" id="peoplePagination"></div>
@@ -77,9 +77,9 @@
 <div class="drawer-overlay" id="drawerOverlay"></div><aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Detail pegawai"><div class="drawer-head" id="drawerHead"></div><div class="drawer-body" id="drawerBody"></div></aside>
 <div class="admin-modal-bg" id="adminModalBg" role="presentation"><div class="admin-modal" role="dialog" aria-modal="true" aria-label="Pengelolaan data"><div class="admin-modal-head"><h2 id="adminModalTitle"></h2><button type="button" id="adminModalClose" aria-label="Tutup">×</button></div><div id="adminModalBody"></div></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div><button class="scrolltop" id="scrollTop" aria-label="Kembali ke atas"><span data-icon="arrow-up"></span></button>
-<script src="assets/config.js?v=profesi-komplet-1105b"></script>
-<script src="assets/app.js?v=profesi-komplet-1105b"></script>
-<script src="assets/admin.js?v=profesi-komplet-1105b"></script>
-<script src="assets/bridge.js?v=profesi-komplet-1105b"></script>
+<script src="assets/config.js?v=status-simpan-1105c"></script>
+<script src="assets/app.js?v=rekap-belum-tercatat-1105"></script>
+<script src="assets/admin.js?v=status-simpan-1105c"></script>
+<script src="assets/bridge.js?v=status-simpan-1105c"></script>
 </body>
 </html>

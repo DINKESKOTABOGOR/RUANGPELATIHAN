@@ -8,6 +8,7 @@
   const storeSession=t=>{try{sessionStorage.setItem(authKey,t)}catch(e){}};
   const dropSession=()=>{try{sessionStorage.removeItem(authKey)}catch(e){}};
   const state={raw:null,token:readSession(),auth:false,identities:{},manualPeople:[],tab:'pegawai',search:'',limit:25,busy:false,deletedRecords:[],deletedLoaded:false};
+  let statusSession=null; // Pilihan status disimpan sementara; server hanya dipanggil saat Simpan.
   // SVG ringan, tanpa library ikon tambahan atau request jaringan.
   const eyeIcon=visible=>visible
     ?'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.1A10 10 0 0 1 12 5c5 0 8.6 3.4 10 7a11 11 0 0 1-4.2 5.2"/><path d="M6.5 6.6A11 11 0 0 0 2 12c1.4 3.6 5 7 10 7 1.5 0 2.9-.3 4.1-.9"/></svg>'
@@ -117,7 +118,13 @@
   async function logout(){try{if(state.token)await API().call('logoutAdmin',state.token)}catch(e){}
     state.auth=false;state.token='';state.identities={};dropSession();render();toast('Berhasil keluar.')}
   function modal(title,content){$('#adminModalTitle').textContent=title;$('#adminModalBody').innerHTML=content;$('#adminModalBg').classList.add('open');document.body.style.overflow='hidden';}
-  function closeModal(){$('#adminModalBg').classList.remove('open');$('#adminModalBody').innerHTML='';document.body.style.overflow='';}
+  function closeModal(){
+    if(statusSession?.saving)return; // Jangan tutup saat permintaan simpan berlangsung.
+    const discarded=!!statusSession?.changes.size;
+    statusSession=null;
+    $('#adminModalBg').classList.remove('open');$('#adminModalBody').innerHTML='';document.body.style.overflow='';
+    if(discarded)toast('Perubahan yang belum disimpan dibatalkan.');
+  }
   const field=(name,label,value='',extra='')=>`<div class="admin-field"><label for="a_${name}">${esc(label)}</label>${/type="password"/.test(extra)?`<div class="admin-password-wrap"><input id="a_${name}" name="${name}" value="${esc(value)}" ${extra}><button class="admin-eye" type="button" data-admin-eye="a_${name}" aria-label="Tampilkan password" title="Lihat password" aria-pressed="false">${eyeIcon(false)}</button></div>`:`<input id="a_${name}" name="${name}" value="${esc(value)}" ${extra}>`}</div>`;
   const actions=(submit='Simpan')=>`<div class="admin-actions"><button type="button" class="admin-btn outline" data-admin="close">Batal</button><button type="submit" class="admin-btn">${submit}</button></div><p id="adminFormError" class="error-live"></p>`;
   function personForm(id=''){
@@ -229,16 +236,87 @@
     finally{state.busy=false;}
   }
   function passwordForm(){modal('Ganti password admin',`<form id="adminPasswordForm">${field('old','Password sekarang','','type="password" required autocomplete="current-password"')}${field('next','Password baru (min. 10 karakter)','','type="password" minlength="10" required autocomplete="new-password"')}${field('confirm','Ulangi password baru','','type="password" required autocomplete="new-password"')}${actions('Ganti password')}</form>`)}
-  function statusForm(id){const p=(state.raw.people||[]).find(x=>x.id===id);if(!p)return;
-    // Katalog profesi HARUS tersedia bagi pegawai baru, meski belum ada status riwayat.
-    // SIBANGKOM berlaku untuk seluruh pegawai. Pelatihan profesi tidak otomatis wajib.
+  // Perubahan hanya dicatat sementara sampai admin menekan Simpan.
+  // Daftar: profesi pegawai + SIBANGKOM (wajib untuk semua), tidak mencampur profesi lain.
+  function statusForm(id){
+    if(statusSession?.saving)return;
+    const p=(state.raw?.people||[]).find(x=>x.id===id);if(!p)return;
     const roles=new Set((p.professions||[]).map(x=>String(x).trim().toUpperCase()));
     const applicable=(state.raw.trainings||[])
       .filter(t=>t.type==='sibangkom'||(t.type==='profesi'&&roles.has(String(t.profession||'').trim().toUpperCase())))
       .sort((a,b)=>Number(a.type==='sibangkom')-Number(b.type==='sibangkom')||a.name.localeCompare(b.name,'id'));
-    const profCount=applicable.filter(t=>t.type==='profesi').length;
-    const sibCount=applicable.filter(t=>t.type==='sibangkom').length;
-    modal('Status pelatihan · '+p.name,`<div class="admin-tip">${profCount} pelatihan sesuai profesi · ${sibCount} SIBANGKOM. Pelatihan profesi yang belum dicatat <b>bukan kewajiban</b>. Klik status untuk mencatat Sudah atau Belum; perubahannya tersimpan ke Sheet.</div><input id="adminStatusQuery" class="admin-filter" placeholder="Cari pelatihan PERAWAT / SIBANGKOM..." autocomplete="off"><div class="admin-training-list" id="adminStatusRows">${applicable.map(t=>`<div class="admin-status-row" data-status-name="${esc(norm(t.name+' '+(t.profession||t.type)))}"><div>${esc(t.name)} <small style="color:#9aa9b7">· ${esc(t.profession||t.type)}</small></div><button class="admin-btn ${p.completed?.includes(t.id)?'done':p.notCompleted?.includes(t.id)?'todo':'unknown'}" data-admin-toggle="${esc(t.id)}" data-admin-person="${esc(p.id)}">${p.completed?.includes(t.id)?'Sudah':p.notCompleted?.includes(t.id)?'Belum':'Belum diisi'}</button></div>`).join('')||'<div class="admin-tip">Belum ada pelatihan pada profesi ini.</div>'}</div><div class="admin-actions"><button class="admin-btn outline" data-admin="close">Tutup</button></div>`);
+    const original=new Map(applicable.map(t=>[t.id, (p.completed||[]).includes(t.id)?'yes':(p.notCompleted||[]).includes(t.id)?'no':'unknown']));
+    statusSession={personId:id,original,changes:new Map(),saving:false};
+    const profCount=applicable.filter(t=>t.type==='profesi').length,sibCount=applicable.filter(t=>t.type==='sibangkom').length;
+    const professionText=(p.professions||[]).join(' / ')||'profesi pegawai';
+    modal('Status pelatihan · '+p.name,`<div class="admin-tip">${profCount} pelatihan ${esc(professionText)} · ${sibCount} SIBANGKOM. Pilih status yang ingin diubah, lalu klik <b>Simpan</b>. Pelatihan profesi yang belum dicatat bukan kewajiban.</div><input id="adminStatusQuery" type="search" class="admin-filter" placeholder="Cari pelatihan..." autocomplete="off" aria-label="Cari pelatihan pegawai"><div class="admin-training-list" id="adminStatusRows">${applicable.map(t=>`<div class="admin-status-row" data-status-name="${esc(norm(t.name+' '+(t.profession||t.type)))}"><div>${esc(t.name)} <small style="color:#9aa9b7">· ${esc(t.profession||t.type)}</small></div><button type="button" class="admin-btn ${original.get(t.id)==='yes'?'done':original.get(t.id)==='no'?'todo':'unknown'}" data-admin-toggle="${esc(t.id)}" data-admin-person="${esc(p.id)}" aria-label="Ubah status ${esc(t.name)}">${original.get(t.id)==='yes'?'Sudah':original.get(t.id)==='no'?'Belum':'Belum diisi'}</button></div>`).join('')||'<div class="admin-tip">Belum ada pelatihan untuk profesi ini.</div>'}</div><div id="adminStatusNoResult" class="admin-tip" hidden>Pelatihan tidak ditemukan.</div><div class="admin-actions admin-status-actions"><button type="button" class="admin-btn outline" data-admin="close">Tutup</button><button type="button" class="admin-btn admin-status-save" id="adminStatusSave" data-admin="save-status" hidden>Simpan</button></div><p class="error-live" id="adminStatusError" role="alert"></p>`);
+  }
+  function filterStatusRows(query){
+    const q=norm(query),rows=document.querySelectorAll('#adminStatusRows [data-status-name]');
+    let visible=0;
+    rows.forEach(row=>{const matches=!q||row.dataset.statusName.includes(q);row.hidden=!matches;if(matches)visible++});
+    const empty=$('#adminStatusNoResult');if(empty)empty.hidden=visible!==0||rows.length===0;
+  }
+  function statusPaint(button,status,dirty=false){
+    if(!button)return;
+    button.className='admin-btn '+(status==='yes'?'done':status==='no'?'todo':'unknown');
+    button.textContent=status==='yes'?'Sudah':status==='no'?'Belum':'Belum diisi';
+    button.dataset.dirty=String(dirty);
+    button.title=dirty?'Belum disimpan':'Klik untuk mengubah';
+  }
+  function updateStatusSaveButton(){
+    const button=$('#adminStatusSave'),draft=statusSession;if(!button||!draft)return;
+    const count=draft.changes.size;
+    button.hidden=count===0;button.disabled=draft.saving;
+    if(!draft.saving)button.textContent=count>1?`Simpan (${count})`:'Simpan';
+  }
+  function stageStatus(personId,trainingId,button){
+    const draft=statusSession;
+    if(!draft||draft.saving||draft.personId!==personId||!draft.original.has(trainingId))return;
+    const before=draft.original.get(trainingId),current=draft.changes.get(trainingId)||before;
+    // Status awal kosong dapat kembali ke kosong sebelum disimpan. Status tersimpan
+    // beralih antara Sudah dan Belum (backend tidak mendukung penghapusan status).
+    const next=current==='unknown'?'yes':current==='yes'?'no':before==='unknown'?'unknown':'yes';
+    if(next===before)draft.changes.delete(trainingId);else draft.changes.set(trainingId,next);
+    statusPaint(button,next,draft.changes.has(trainingId));
+    updateStatusSaveButton();
+  }
+  async function saveStatusDraft(){
+    const draft=statusSession;if(!draft||draft.saving||!draft.changes.size||!state.auth)return;
+    const button=$('#adminStatusSave'),error=$('#adminStatusError');
+    draft.saving=true;
+    if(error)error.textContent='';
+    if(button){button.disabled=true;button.textContent='Menyimpan...';button.classList.add('status-saving');button.setAttribute('aria-busy','true')}
+    document.querySelectorAll('#adminStatusRows [data-admin-toggle]').forEach(b=>b.disabled=true);
+    API()?.markLocalEdit?.(); // Cegah refresh latar belakang menimpa data sampai simpan selesai.
+    let saved=0;
+    try{
+      while(draft.changes.size){
+        const entries=[...draft.changes.entries()].slice(0,30);
+        const payload=entries.map(([trainingId,status])=>({personId:draft.personId,trainingId,done:status==='yes'}));
+        const result=await API().call('saveCompletionsBatch',state.token,payload);
+        if(!result?.ok)throw Error('Google Sheets belum mengonfirmasi penyimpanan.');
+        for(const [trainingId,status] of entries){
+          assignStatus(draft.personId,trainingId,status==='yes');
+          draft.original.set(trainingId,status);draft.changes.delete(trainingId);
+          const b=[...document.querySelectorAll('#adminStatusRows [data-admin-toggle]')].find(x=>x.dataset.adminToggle===trainingId);
+          statusPaint(b,status,false);
+        }
+        saved+=entries.length;
+        // Satu penyimpanan cache browser per kelompok, bukan per klik status.
+        API().commitLocal?.(state.raw);
+      }
+      toast(`${saved} status pelatihan tersimpan.`);
+    }catch(e){
+      if(error)error.textContent='Belum berhasil menyimpan: '+(e.message||e)+' Pilihan yang belum tersimpan tetap ada. Klik Simpan lagi.';
+      else toast('Gagal menyimpan status: '+(e.message||e));
+      if(saved)toast(`${saved} status sudah tersimpan. Sisanya bisa dicoba lagi.`);
+    }finally{
+      draft.saving=false;
+      if(button){button.classList.remove('status-saving');button.removeAttribute('aria-busy')}
+      document.querySelectorAll('#adminStatusRows [data-admin-toggle]').forEach(b=>b.disabled=false);
+      updateStatusSaveButton();
+    }
   }
   function linkForm(sibKey){const sib=(state.raw.sibEntries||[]).find(s=>s.key===sibKey);if(!sib)return;
     modal('Cocokkan peserta SIBANGKOM',`<form id="adminLinkForm" data-key="${esc(sibKey)}"><div class="admin-warning"><strong>${esc(sib.name)}</strong><div>${esc(sib.bidang||'—')} · ${esc(sib.tim||'—')}</div><p>Pastikan orangnya benar sebelum dihubungkan. Jangan hanya mengandalkan nama yang mirip.</p></div><div class="admin-field"><label for="adminLinkQuery">Cari pegawai tujuan</label><input type="search" id="adminLinkQuery" placeholder="Ketik nama atau unit kerja..." autocomplete="off"></div><div class="admin-field"><label for="adminLinkTarget">Pilih pegawai yang cocok</label><select id="adminLinkTarget" name="personId" required><option value="">Mencari pegawai...</option></select><small id="adminLinkHint" class="help" aria-live="polite"></small></div><div class="admin-actions" style="justify-content:flex-start"><button class="admin-btn outline" type="button" data-admin="refresh-link">Perbarui daftar pegawai</button></div>${actions('Hubungkan peserta')}</form>`);
@@ -315,10 +393,7 @@
       localSaved(form,payload,result);closeModal();render();toast('Tersimpan di Google Sheets.');
     }catch(e){if(error)error.textContent=e.message;else toast(e.message);if(button){button.disabled=false;button.textContent='Coba simpan lagi'}}finally{state.busy=false}
   }
-  // Status dikirim dalam kelompok kecil. Klik langsung mengubah tampilan,
-  // lalu disimpan di latar belakang (tanpa menutup modal atau reload).
-  const pendingStatuses=new Map();
-  let statusTimer=null,statusSaving=false,statusDirty=false;
+  // Mengubah UI setelah backend menyatakan sukses, tanpa reload halaman.
   function assignStatus(personId,trainingId,yes){
     const p=(state.raw?.people||[]).find(x=>x.id===personId);if(!p)return;
     p.completed=(p.completed||[]).filter(x=>x!==trainingId);
@@ -330,69 +405,6 @@
     }
     window.PelatihanView?.patchCompletion?.(personId,trainingId,yes);
   }
-  function paintStatus(button,yes,waiting=false){
-    if(!button?.isConnected)return;
-    button.className='admin-btn '+(yes?'done':'todo');
-    button.textContent=waiting?(yes?'Sudah · menyimpan':'Belum · menyimpan'):(yes?'Sudah':'Belum');
-    button.setAttribute('aria-busy',waiting?'true':'false');
-    button.title=waiting?'Menyimpan ke Google Sheets...':'Tersimpan';
-  }
-  function scheduleStatusFlush(){
-    if(statusTimer)clearTimeout(statusTimer);
-    statusTimer=setTimeout(flushStatuses,260);
-  }
-  async function flushStatuses(){
-    if(statusSaving||!pendingStatuses.size)return;
-    const entries=[...pendingStatuses.values()].slice(0,25);
-    entries.forEach(x=>pendingStatuses.delete(x.personId+'|||'+x.trainingId));
-    statusSaving=true;
-    try{
-      const result=await API().call('saveCompletionsBatch',state.token,entries.map(x=>({personId:x.personId,trainingId:x.trainingId,done:x.done})));
-      if(!result?.ok)throw Error('Gagal menyimpan status.');
-      for(const x of entries){
-        const key=x.personId+'|||'+x.trainingId;
-        const newer=pendingStatuses.get(key);
-        if(!newer){document.querySelectorAll('[data-admin-toggle]').forEach(b=>{
-          if(b.dataset.adminPerson===x.personId&&b.dataset.adminToggle===x.trainingId)paintStatus(b,x.done,false);
-        })}
-      }
-      statusDirty=true;
-    }catch(e){
-      // Jika permintaan gagal, jangan berpura-pura sudah tersimpan.
-      // Klik berikutnya tetap bisa dilakukan; status dikembalikan ke nilai terakhir yang sudah aman.
-      for(const x of entries){
-        const key=x.personId+'|||'+x.trainingId;
-        if(pendingStatuses.has(key))continue;
-        assignStatus(x.personId,x.trainingId,x.before==='unknown'?null:x.before==='yes');
-        document.querySelectorAll('[data-admin-toggle]').forEach(b=>{
-          if(b.dataset.adminPerson===x.personId&&b.dataset.adminToggle===x.trainingId){
-            if(x.before==='unknown'){b.className='admin-btn unknown';b.textContent='Belum diisi'}
-            else paintStatus(b,x.before==='yes',false);
-            b.setAttribute('aria-busy','false');
-          }
-        });
-      }
-      toast('Status belum tersimpan: '+(e.message||e));
-    }finally{
-      statusSaving=false;
-      if(pendingStatuses.size)scheduleStatusFlush();
-      else if(statusDirty){
-        statusDirty=false;
-        API().commitLocal?.(state.raw); // Tulis cache browser sekali untuk satu rangkaian klik.
-        toast('Status tersimpan.');
-      }
-    }
-  }
-  function toggle(personId,trainingId,button){
-    if(!state.auth)return;
-    const p=(state.raw?.people||[]).find(x=>x.id===personId);if(!p)return;
-    const done=(p.completed||[]).includes(trainingId),before=done?'yes':(p.notCompleted||[]).includes(trainingId)?'no':'unknown';
-    const key=personId+'|||'+trainingId,existing=pendingStatuses.get(key);
-    API()?.markLocalEdit?.(); // mencegah refresh background menimpa perubahan yang belum selesai
-    assignStatus(personId,trainingId,!done);
-    pendingStatuses.set(key,{personId,trainingId,done:!done,before:existing?.before||before});
-    paintStatus(button,!done,true);scheduleStatusFlush();
-  }
   document.addEventListener('click',async e=>{
     const eye=e.target.closest('[data-admin-eye]');
     if(eye){const input=document.getElementById(eye.dataset.adminEye);if(!input)return;const visible=input.type==='password';input.type=visible?'text':'password';eye.innerHTML=eyeIcon(visible);eye.setAttribute('aria-pressed',String(visible));eye.setAttribute('aria-label',visible?'Sembunyikan password':'Tampilkan password');eye.title=visible?'Sembunyikan password':'Lihat password';return;}
@@ -402,10 +414,10 @@
     const edit=e.target.closest('[data-admin-edit]');if(edit){personForm(edit.dataset.adminEdit);return}
     const mark=e.target.closest('[data-admin-status]');if(mark){statusForm(mark.dataset.adminStatus);return}
     const link=e.target.closest('[data-admin-link]');if(link){linkForm(link.dataset.adminLink);return}
-    const toggleBtn=e.target.closest('[data-admin-toggle]');if(toggleBtn){toggle(toggleBtn.dataset.adminPerson,toggleBtn.dataset.adminToggle,toggleBtn);return}
-    const action=e.target.closest('[data-admin]');if(action){const a=action.dataset.admin;if(a==='close')closeModal();if(a==='add-person')personForm();if(a==='add-training')trainingForm();if(a==='add-profession')professionForm();if(a==='password')passwordForm();if(a==='logout')await logout();if(a==='more'){state.limit+=25;renderListing()}if(a==='refresh-link')refreshLinkCandidates()}
+    const toggleBtn=e.target.closest('[data-admin-toggle]');if(toggleBtn){stageStatus(toggleBtn.dataset.adminPerson,toggleBtn.dataset.adminToggle,toggleBtn);return}
+    const action=e.target.closest('[data-admin]');if(action){const a=action.dataset.admin;if(a==='close')closeModal();if(a==='add-person')personForm();if(a==='add-training')trainingForm();if(a==='add-profession')professionForm();if(a==='password')passwordForm();if(a==='logout')await logout();if(a==='more'){state.limit+=25;renderListing()}if(a==='refresh-link')refreshLinkCandidates();if(a==='save-status')await saveStatusDraft()}
   });
-  document.addEventListener('input',e=>{if(e.target.id==='adminQuery'){state.search=e.target.value;state.limit=25;renderListing()}if(e.target.id==='adminLinkQuery')renderLinkCandidates();if(e.target.id==='adminRestoreConfirm'){const btn=$('#adminRestoreSubmit');if(btn)btn.disabled=e.target.value!=='PULIHKAN'||state.busy;}if(e.target.id==='adminDeleteConfirm'){const btn=$('#adminDeleteSubmit');if(btn)btn.disabled=e.target.value!=='HAPUS'||state.busy;}if(e.target.id==='adminStatusQuery'){const q=norm(e.target.value);document.querySelectorAll('[data-status-name]').forEach(row=>row.hidden=!norm(row.dataset.statusName).includes(q))}});
+  document.addEventListener('input',e=>{if(e.target.id==='adminQuery'){state.search=e.target.value;state.limit=25;renderListing()}if(e.target.id==='adminLinkQuery')renderLinkCandidates();if(e.target.id==='adminRestoreConfirm'){const btn=$('#adminRestoreSubmit');if(btn)btn.disabled=e.target.value!=='PULIHKAN'||state.busy;}if(e.target.id==='adminDeleteConfirm'){const btn=$('#adminDeleteSubmit');if(btn)btn.disabled=e.target.value!=='HAPUS'||state.busy;}if(e.target.id==='adminStatusQuery')filterStatusRows(e.target.value)});
   document.addEventListener('change',e=>{if(e.target.id==='adminTrainingType')$('#adminTrainingProfession').disabled=e.target.value!=='profesi'});
   document.addEventListener('submit',e=>{if(!e.target.id.startsWith('admin'))return;e.preventDefault();if(e.target.id==='adminLogin')login(e.target);else if(e.target.id==='adminDeleteForm')submitDelete(e.target);else if(e.target.id==='adminRestoreForm')submitRestore(e.target);else submitForm(e.target)});
   $('#adminModalClose').addEventListener('click',closeModal);$('#adminModalBg').addEventListener('click',e=>{if(e.target===$('#adminModalBg'))closeModal()});
