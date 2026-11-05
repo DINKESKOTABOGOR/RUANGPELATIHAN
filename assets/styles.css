@@ -219,3 +219,6 @@ button,input,select{font:inherit}
 .sib-more-wrap{display:flex;gap:15px;justify-content:center;align-items:center;flex-wrap:wrap;padding:24px 12px;color:#728497;font-size:12px}
 .sib-profile-link{border:0;border-top:1px solid #e7edf3;background:transparent;width:100%;padding:13px 0 3px;margin-top:12px;text-align:left;color:#207cc1;font-size:12px;font-weight:700;cursor:pointer}
 .sib-profile-link:hover{color:#14568d}
+
+/* Katalog profesi berbeda dengan status pelatihan wajib. */
+.catalog-note{margin:4px 0 11px;padding:10px 12px;border-radius:9px;background:#f1f7fd;color:#456d8c;font-size:11px;line-height:1.5}.admin-form-note{grid-column:1/-1;margin:8px 0 3px}
