@@ -293,3 +293,28 @@ button,input,select{font:inherit}
 .drawer-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .mini-stat{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 @media(max-width:500px){.drawer-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Header halaman memakai judul di topbar saja. */
+.section-view>.view-intro{margin-top:0;margin-bottom:14px;align-items:center}
+.section-view>.view-intro p{line-height:1.55}
+@media(max-width:760px){.section-view>.view-intro{gap:10px;margin-bottom:12px;align-items:flex-start;flex-wrap:wrap}}
+
+/* Dropdown seragam untuk Profesi, Unit kerja, Status dan Jenis pelatihan. */
+.filter-field[data-filter-combo]{position:relative;min-width:0}
+.filter-field[data-filter-combo] .combo-button{width:100%;min-width:0}
+.filter-field[data-filter-combo] .combo-button strong{font-size:12px;flex:1;text-align:left;min-width:0;max-width:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#384f63}
+.filter-field[data-filter-combo] .combo-button svg:last-child{flex-shrink:0}
+.filter-field[data-filter-combo] .combo-pop{min-width:min(270px,85vw);max-width:min(430px,88vw);right:auto;width:max(100%,270px);z-index:35}
+.filter-field[data-filter-combo] .combo-options{max-height:265px;overscroll-behavior:contain}
+.filter-field[data-filter-combo] .combo-options button{min-height:34px;word-break:break-word}
+.filter-field[data-filter-combo] .combo-empty{padding:13px 10px;color:#8293a6;font-size:11px}
+@media(max-width:760px){.filter-field[data-filter-combo] .combo-pop{width:100%;min-width:100%;max-width:none;right:0}}
+
+/* Identitas publik hanya berisi nomor yang sudah disensor di backend. */
+.meta-grid .masked-identity{overflow-wrap:anywhere;letter-spacing:.025em;font-variant-numeric:tabular-nums;line-height:1.7}
+
+/* Filter profesi Peta Pelatihan sama dengan dropdown lain. */
+.mini-controls .mini-role-filter{width:180px;flex:0 0 180px}
+.mini-controls .mini-role-filter .combo-button{max-width:100%}
+.mini-controls .mini-role-filter .combo-pop{right:0;left:auto;width:max(100%,260px);min-width:min(260px,90vw)}
+@media(max-width:530px){.mini-controls .mini-role-filter{width:145px;flex:0 0 145px}}

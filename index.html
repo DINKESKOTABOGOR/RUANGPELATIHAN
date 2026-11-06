@@ -8,7 +8,7 @@
 <title>Ruang Pelatihan | Dinas Kesehatan Kota Bogor</title>
 <link rel="icon" type="image/webp" href="assets/logo-dinkes.webp">
 <link rel="preconnect" href="https://script.google.com" crossorigin>
-<link rel="stylesheet" href="assets/styles.css?v=kosong-belum-20261105">
+<link rel="stylesheet" href="assets/styles.css?v=filter-identitas-20261106">
 
 <meta name="theme-color" content="#f4f8fc"><meta name="description" content="Portal pelatihan pegawai Dinas Kesehatan Kota Bogor. Cari pegawai, lihat kebutuhan pelatihan, dan temukan pembelajaran per profesi.">
 </head>
@@ -44,42 +44,42 @@
     <div class="source-note"><span data-icon="info"></span><div><b>Cara membaca status pelatihan</b><p><strong>Sudah</strong> = angka 1 pada Google Sheets. <strong>Belum</strong> = tertulis “Belum” atau sel pelatihannya kosong, baik profesi maupun SIBANGKOM. Pegawai dengan NIP yang sama digabung, tetapi bisa muncul di lebih dari satu profesi.</p></div></div>
   </section>
   <section id="view-pegawai" class="section-view">
-    <div class="view-intro"><div><h2>Data Pegawai</h2><p>Ketik nama atau pakai filter profesi, pelatihan, dan unit kerja.</p></div><div class="pill-label" id="peoplePill"></div></div>
+    <div class="view-intro"><div><p>Ketik nama atau pakai filter profesi, pelatihan, dan unit kerja.</p></div><div class="pill-label" id="peoplePill"></div></div>
     <div class="filter-panel"><div class="filter-grid">
       <div class="filter-field"><label class="field-label" for="nameQuery">Nama pegawai</label><div class="field-box"><span data-icon="search"></span><input id="nameQuery" placeholder="Ketik nama pegawai..." autocomplete="off"></div></div>
       <div class="filter-field" id="trainingCombo"><span class="field-label">Jenis pelatihan</span><button class="combo-button" id="trainingButton" aria-haspopup="listbox" aria-expanded="false"><span data-icon="book-open"></span><span id="trainingLabel">Semua pelatihan</span><span data-icon="chevron-down"></span></button><div class="combo-pop" id="trainingPopup"><input id="trainingSearch" aria-label="Cari jenis pelatihan" placeholder="Cari nama pelatihan..."><div id="trainingOptions" class="combo-options" role="listbox"></div></div></div>
-      <div class="filter-field"><label class="field-label" for="roleFilter">Profesi</label><div class="field-box"><span data-icon="briefcase-medical"></span><select id="roleFilter"><option value="">Semua profesi</option></select><span class="select-arrow" data-icon="chevron-down"></span></div></div>
-      <div class="filter-field"><label class="field-label" for="unitFilter">Unit kerja</label><div class="field-box"><span data-icon="building-2"></span><select id="unitFilter"><option value="">Semua unit kerja</option></select><span class="select-arrow" data-icon="chevron-down"></span></div></div>
-      <div class="filter-field"><label class="field-label" for="statusFilter">Status pelatihan</label><div class="field-box"><span data-icon="sliders-horizontal"></span><select id="statusFilter"><option value="">Semua status</option><option value="yes">Sudah</option><option value="no">Belum</option></select><span class="select-arrow" data-icon="chevron-down"></span></div></div>
+      <div class="filter-field" data-filter-combo="role"><label class="field-label" for="roleButton">Profesi</label><select id="roleFilter" hidden style="display:none" aria-hidden="true"><option value="">Semua profesi</option></select><button class="combo-button" type="button" id="roleButton" aria-haspopup="listbox" aria-controls="roleOptions" aria-expanded="false"><span data-icon="briefcase-medical"></span><strong id="roleLabel">Semua profesi</strong><span data-icon="chevron-down"></span></button><div class="combo-pop" id="rolePopup"><input id="roleSearch" aria-label="Cari profesi" autocomplete="off" placeholder="Cari profesi..."><div class="combo-options" id="roleOptions" role="listbox"></div></div></div>
+      <div class="filter-field" data-filter-combo="unit"><label class="field-label" for="unitButton">Unit kerja</label><select id="unitFilter" hidden style="display:none" aria-hidden="true"><option value="">Semua unit kerja</option></select><button class="combo-button" type="button" id="unitButton" aria-haspopup="listbox" aria-controls="unitOptions" aria-expanded="false"><span data-icon="building-2"></span><strong id="unitLabel">Semua unit kerja</strong><span data-icon="chevron-down"></span></button><div class="combo-pop" id="unitPopup"><input id="unitSearch" aria-label="Cari unit kerja" autocomplete="off" placeholder="Cari unit kerja..."><div class="combo-options" id="unitOptions" role="listbox"></div></div></div>
+      <div class="filter-field" data-filter-combo="status"><label class="field-label" for="statusButton">Status pelatihan</label><select id="statusFilter" hidden style="display:none" aria-hidden="true"><option value="">Semua status</option><option value="yes">Sudah</option><option value="no">Belum</option></select><button class="combo-button" type="button" id="statusButton" aria-haspopup="listbox" aria-controls="statusOptions" aria-expanded="false"><span data-icon="sliders-horizontal"></span><strong id="statusLabel">Semua status</strong><span data-icon="chevron-down"></span></button><div class="combo-pop" id="statusPopup"><input id="statusSearch" aria-label="Cari status pelatihan" autocomplete="off" placeholder="Cari status..."><div class="combo-options" id="statusOptions" role="listbox"></div></div></div>
     </div><div class="filter-footer"><div id="filterChips" class="chips"></div><button class="clear-btn" id="resetFilters">Bersihkan filter ↗</button></div></div>
     <div class="toolbar"><div id="resultCount" class="result-count"></div><div class="toolbar-right"><button class="small-btn active" id="tableToggle" title="Tampilan tabel"><span data-icon="list"></span> Tabel</button><button class="small-btn" id="cardToggle" title="Tampilan kartu"><span data-icon="layout-grid"></span> Kartu</button><button class="small-btn" id="sortBtn" title="Urutan nama"><span data-icon="arrow-down-a-z"></span> A–Z</button></div></div>
     <div id="peopleResults"></div><div class="page-controls" id="peoplePagination"></div>
   </section>
   <section id="view-pelatihan" class="section-view">
-    <div class="view-intro"><div><h2>Peta Pelatihan</h2><p>Pilih satu pelatihan, lalu cek siapa saja yang sudah dan belum ikut.</p></div><div class="pill-label" id="trainingPill"></div></div>
-    <div class="training-layout"><div><div class="mini-controls"><div class="field-box"><span data-icon="search"></span><input id="trainingPageSearch" placeholder="Cari nama pelatihan..." autocomplete="off" aria-label="Cari pelatihan"></div><select id="trainingRole"><option value="">Semua profesi</option></select></div><div id="trainingPageList" class="training-list"></div><div class="page-controls" id="trainPagination"></div></div><div id="trainingDetail" class="training-detail"></div></div>
+    <div class="view-intro"><div><p>Pilih satu pelatihan, lalu cek siapa saja yang sudah dan belum ikut.</p></div><div class="pill-label" id="trainingPill"></div></div>
+    <div class="training-layout"><div><div class="mini-controls"><div class="field-box"><span data-icon="search"></span><input id="trainingPageSearch" placeholder="Cari nama pelatihan..." autocomplete="off" aria-label="Cari pelatihan"></div><div class="filter-field mini-role-filter" data-filter-combo="trainRole"><select id="trainingRole" hidden style="display:none" aria-hidden="true"><option value="">Semua profesi</option></select><button type="button" class="combo-button" id="trainRoleButton" aria-haspopup="listbox" aria-controls="trainRoleOptions" aria-expanded="false"><span data-icon="briefcase-medical"></span><strong id="trainRoleLabel">Semua profesi</strong><span data-icon="chevron-down"></span></button><div class="combo-pop" id="trainRolePopup"><input type="search" id="trainRoleSearch" placeholder="Cari profesi..." aria-label="Cari profesi pelatihan" autocomplete="off"><div class="combo-options" id="trainRoleOptions" role="listbox"></div></div></div></div><div id="trainingPageList" class="training-list"></div><div class="page-controls" id="trainPagination"></div></div><div id="trainingDetail" class="training-detail"></div></div>
   </section>
   <section class="section-view" id="view-sibangkom">
-<div class="view-intro"><div><h2>Riwayat SIBANGKOM</h2><p>Pelatihan wajib untuk semua pegawai. Sel kosong dihitung Belum.</p></div><div class="pill-label" id="sibCount">—</div></div>
+<div class="view-intro"><div><p>Pelatihan wajib untuk semua pegawai. Sel kosong dihitung Belum.</p></div><div class="pill-label" id="sibCount">—</div></div>
 <div class="filter-panel sib-filter"><div class="filter-field"><label for="sibSearch" class="field-label">Cari pegawai, profesi, bidang, atau unit kerja</label><div class="field-box"><span data-icon="search"></span><input id="sibSearch" autocomplete="off" placeholder="Cari nama pegawai, misalnya Amalia Safitri..."></div></div></div>
 <div id="sibResults"></div>
 <div class="source-note"><span data-icon="info"></span><div><b>Catatan SIBANGKOM</b><p>Semua pegawai muncul di sini. Yang belum ada riwayatnya ditandai Belum. Untuk peserta dari tab SIBANGKOM yang belum terhubung, admin bisa cocokkan lewat Panel Admin.</p></div></div>
 </section>
 <section id="view-referensi" class="section-view">
-    <div class="view-intro"><div><h2>Pembelajaran & JPL</h2><p>Referensi pembelajaran wajib dan pemenuhan 20 JPL, lengkap dengan tautannya.</p></div><span class="pill-label" id="jplPill">REFERENSI PEMBELAJARAN WAJIB</span></div>
+    <div class="view-intro"><div><p>Referensi pembelajaran wajib dan pemenuhan 20 JPL, lengkap dengan tautannya.</p></div><span class="pill-label" id="jplPill">REFERENSI PEMBELAJARAN WAJIB</span></div>
     <div class="panel"><div class="ref-tabs"><button class="ref-tab active" data-ref="wajib">Pembelajaran Wajib</button><button class="ref-tab" data-ref="jpl">Referensi 20 JPL</button></div><div id="referenceContent"></div></div>
   </section>
 
-<section class="section-view" id="view-admin"><div class="view-intro"><div><h2>Panel Admin</h2><p>Rapikan pegawai, profesi, dan pelatihan tanpa mengubah sheet profesi asal.</p></div><span class="pill-label" id="adminLabel">KHUSUS ADMIN</span></div><div id="adminContent"></div></section>
+<section class="section-view" id="view-admin"><div class="view-intro"><div><p>Rapikan pegawai, profesi, dan pelatihan tanpa mengubah sheet profesi asal.</p></div><span class="pill-label" id="adminLabel">KHUSUS ADMIN</span></div><div id="adminContent"></div></section>
   <footer class="footer">Ruang Pelatihan Dinkes Kota Bogor &nbsp; / &nbsp; Sumber: Google Sheets pemetaan pelatihan<br><span class="copyright">&copy; 2026 @benrama</span></footer>
 </main>
 </div>
 <div class="drawer-overlay" id="drawerOverlay"></div><aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Detail pegawai"><div class="drawer-head" id="drawerHead"></div><div class="drawer-body" id="drawerBody"></div></aside>
 <div class="admin-modal-bg" id="adminModalBg" role="presentation"><div class="admin-modal" role="dialog" aria-modal="true" aria-label="Pengelolaan data"><div class="admin-modal-head"><h2 id="adminModalTitle"></h2><button type="button" id="adminModalClose" aria-label="Tutup">×</button></div><div id="adminModalBody"></div></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div><button class="scrolltop" id="scrollTop" aria-label="Kembali ke atas"><span data-icon="arrow-up"></span></button>
-<script src="assets/config.js?v=kosong-belum-20261105"></script>
-<script src="assets/app.js?v=kosong-belum-20261105"></script>
-<script src="assets/admin.js?v=kosong-belum-20261105"></script>
-<script src="assets/bridge.js?v=kosong-belum-20261105"></script>
+<script src="assets/config.js?v=turbo-rotasi-20261105"></script>
+<script src="assets/app.js?v=filter-identitas-20261106"></script>
+<script src="assets/admin.js?v=filter-identitas-20261106"></script>
+<script src="assets/bridge.js?v=filter-identitas-20261106"></script>
 </body>
 </html>

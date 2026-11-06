@@ -4,7 +4,7 @@
 (() => {'use strict';
   const BACKEND_URL=String(window.DINKES_CONFIG?.APPS_SCRIPT_URL||'').trim();
   const GAS=/^https:\/\/script\.google\.com\/macros\/s\/[-\w]+\/exec$/.test(BACKEND_URL);
-  const CACHE_KEY='dinkes_sdm_live_github_2026_v12';
+  const CACHE_KEY='dinkes_sdm_live_github_2026_v13_masked';
   const TTL=Number(window.DINKES_CONFIG?.PUBLIC_CACHE_MS)||180000;
   const allowed=new Set(['getPublicData','getAdminData','loginAdmin','logoutAdmin','changeAdminPassword','savePerson','saveProfession','saveTraining','saveCompletion','saveCompletionsBatch','linkSibangkom','deleteRecord','getDeletedRecords','restoreRecord']);
   // Read-only public endpoint via ContentService JSONP (tanpa iframe / CORS).
@@ -117,7 +117,7 @@
           status:(p.completed||[]).includes(t.id)?'yes':(p.notCompleted||[]).includes(t.id)?'no':'unknown'
         }));
         const recorded=roleTraining[role].filter(id=>yes.includes(id)||no.includes(id));
-        people.push({id:p.id+'|'+role,sourceId:p.id,name:p.name||'Nama belum diisi',role,unit:p.unit||'Unit belum diisi',employment:p.status||'',program:p.program||'',nip:'',yes,no,mandatory,recorded,sibLinked:!!linked});
+        people.push({id:p.id+'|'+role,sourceId:p.id,name:p.name||'Nama belum diisi',role,unit:p.unit||'Unit belum diisi',employment:p.status||'',program:p.program||'',nipMasked:p.nipMasked||'',nikMasked:p.nikMasked||'',yes,no,mandatory,recorded,sibLinked:!!linked});
       }
     }
     const names=Object.fromEntries((data.trainings||[]).map(t=>[t.id,t.name]));

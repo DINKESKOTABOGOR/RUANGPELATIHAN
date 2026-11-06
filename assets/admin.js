@@ -77,7 +77,7 @@
     const root=$('#adminContent');if(!root)return;
     if(!state.raw){root.innerHTML='<div class="admin-tip">Data sedang disiapkan...</div>';return;}
     if(!state.auth){
-      root.innerHTML=`<form class="admin-login" id="adminLogin"><img src="${esc(window.DINKES_LOGO_SRC||'assets/logo-dinkes.webp')}" alt="Logo Dinkes Kota Bogor"><h2>Halo, Admin! 👋</h2><p>Masuk untuk memperbaiki identitas pegawai, menambah profesi, dan mengelola pelatihan.</p><div class="admin-field"><label for="adminUser">Username</label><input id="adminUser" name="username" required autocomplete="username"></div><div class="admin-field"><label for="adminPassword">Password</label><div class="admin-password-wrap"><input id="adminPassword" name="password" type="password" required autocomplete="current-password"><button class="admin-eye" type="button" data-admin-eye="adminPassword" aria-label="Tampilkan password" title="Lihat password" aria-pressed="false">${eyeIcon(false)}</button></div></div><p id="adminLoginError" class="error-live" role="alert"></p><button type="submit" class="admin-btn" style="width:100%">Masuk ke panel admin</button><div class="admin-tip">Identitas NIP/NIK hanya ditampilkan setelah login. Perubahan disimpan ke Sheet tambahan APP_*.</div></form>`;
+      root.innerHTML=`<form class="admin-login" id="adminLogin"><img src="${esc(window.DINKES_LOGO_SRC||'assets/logo-dinkes.webp')}" alt="Logo Dinkes Kota Bogor"><h2>Halo, Admin! 👋</h2><p>Masuk untuk memperbaiki identitas pegawai, menambah profesi, dan mengelola pelatihan.</p><div class="admin-field"><label for="adminUser">Username</label><input id="adminUser" name="username" required autocomplete="username"></div><div class="admin-field"><label for="adminPassword">Password</label><div class="admin-password-wrap"><input id="adminPassword" name="password" type="password" required autocomplete="current-password"><button class="admin-eye" type="button" data-admin-eye="adminPassword" aria-label="Tampilkan password" title="Lihat password" aria-pressed="false">${eyeIcon(false)}</button></div></div><p id="adminLoginError" class="error-live" role="alert"></p><button type="submit" class="admin-btn" style="width:100%">Masuk ke panel admin</button><div class="admin-tip">Nomor NIP/NIK lengkap hanya bisa dilihat admin. Perubahan disimpan ke Sheet tambahan APP_*.</div></form>`;
       if(!API()?.GAS)$('#adminLoginError').textContent='Koneksi Apps Script belum disiapkan. Periksa pengaturan aplikasi.';
       return;
     }
@@ -223,6 +223,8 @@
           raw.people=raw.people.filter(p=>p.id!==key);
         }
         state.identities[id]=result.identity||{};
+        person.nipMasked=maskProfileId(state.identities[id].nip);
+        person.nikMasked=maskProfileId(state.identities[id].nik);
         if(id.startsWith('USR:')){
           state.manualPeople=state.manualPeople.filter(p=>p.id!==id);
           state.manualPeople.push({id,name:person.name,unit:person.unit,status:person.status,professions:person.professions,program:person.program});
@@ -329,6 +331,11 @@
   }
   // Terapkan perubahan kecil ke memori dan cache setelah backend menyatakan BERHASIL.
   // Hindari getPublicData(true) + reload seluruh website setiap kali admin menyimpan satu baris.
+  // Data untuk profil publik cukup 4 angka pertama. Nomor lengkap tetap di identitas admin.
+  function maskProfileId(value){
+    const digits=String(value||'').replace(/\D/g,'');
+    return (digits.length===16||digits.length===18)?digits.slice(0,4)+'*'.repeat(digits.length-4):'';
+  }
   function localSaved(form,payload,result){
     const raw=state.raw;if(!raw)return;
     if(form.id==='adminLinkForm'){
@@ -352,7 +359,7 @@
       const id=result.id||payload.id;if(!id)return;
       let person=(raw.people||[]).find(x=>x.id===id);
       if(!person){person={id,completed:[],notCompleted:[],sources:[],sib:null,unmatchedSib:false};raw.people.push(person)}
-      Object.assign(person,{name:payload.name,unit:payload.unit,status:payload.status,program:payload.program,professions:payload.professions});
+      Object.assign(person,{name:payload.name,unit:payload.unit,status:payload.status,program:payload.program,professions:payload.professions,nipMasked:maskProfileId(payload.nip),nikMasked:maskProfileId(payload.nik)});
       state.identities[id]={nip:payload.nip||'',nik:payload.nik||''};
       const index=state.manualPeople.findIndex(x=>x.id===id);
       const publicPerson={id,name:payload.name,unit:payload.unit,status:payload.status,program:payload.program,professions:payload.professions};
